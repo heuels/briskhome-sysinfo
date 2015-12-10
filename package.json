@@ -1,0 +1,14 @@
+{
+  "name": "briskhome-sysmon",
+  "version": "0.1.1",
+  "description": "Briskhome system monitor module. Collects information about the target system and sends it to the main server.",
+  "main": "briskhome-sysmon.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Egor Zaitsev <ezaitsev@briskhome.com>",
+  "license": "ISC",
+  "dependencies": {
+    "underscore": "^1.8.3"
+  }
+}
