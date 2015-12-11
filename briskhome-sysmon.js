@@ -3,15 +3,7 @@
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.1.1
- */
-
-/*
-  Checklist for v0.1.2:
-    - Move default event values to a separate const
-    v Put semicolons where possible
-    v Make use of 'util' module
-    - Use Object.assign instead of _.extend & _.clone
+ * @version 0.1.2
  */
 
 /*
@@ -23,7 +15,7 @@
 
 /*
   Checklist for v0.2.0:
-    - Remove all external dependencies
+    v Remove all external dependencies
     - Remove unnecessary variable declarations
 */
 
@@ -33,9 +25,6 @@
 var events   = require('events'),
     util     = require('util'),
     os       = require('os');
-
-/* External dependencies - marked for removal prior to v0.2.0 */
-var _        = require('underscore');
 
 /* Variable declarations - marked for removal prior to v0.2.0 */
 var critical = os.cpus().length, // This property is to be removed in v0.1.2
@@ -53,7 +42,7 @@ var critical = os.cpus().length, // This property is to be removed in v0.1.2
 /*
   Const DEFAULT_CONFIG should be used as a default configuration object.
 */
-const DEFAULT_CONFIG = {
+var DEFAULT_CONFIG = {
   delay     : 5000,   // 5s.
   silent    : false,  // By default Sysmon spams events every cycle.
   immediate : false,  // This option should be renamed.
@@ -138,19 +127,19 @@ Sysmon.prototype.start = function(options) {
     }
     // TODO: Check if config.loadavg is array.
     if(data.loadavg[0] > config.critical1) {
-      _this.sendEvent('loadavg1', _.extend({type: 'loadavg1'}, data));
+      _this.sendEvent('loadavg1', Object.assign({type: 'loadavg1'}, data));
     }
     if(data.loadavg[1] > config.critical5) {
-      _this.sendEvent('loadavg5', _.extend({type: 'loadavg5'}, data));
+      _this.sendEvent('loadavg5', Object.assign({type: 'loadavg5'}, data));
     }
     if(data.loadavg[2] > config.critical15) {
-      _this.sendEvent('loadavg15', _.extend({type: 'loadavg15'}, data));
+      _this.sendEvent('loadavg15', Object.assign({type: 'loadavg15'}, data));
     }
     if(data.freemem < freemem) {
-      _this.sendEvent('freemem', _.extend({type: 'freemem'}, data));
+      _this.sendEvent('freemem', Object.assign({type: 'freemem'}, data));
     }
     if(Number(config.uptime) && data.uptime > Number(config.uptime)) {
-      _this.sendEvent('uptime', _.extend({type: 'uptime'}, data));
+      _this.sendEvent('uptime', Object.assign({type: 'uptime'}, data));
     }
   };
 
@@ -183,7 +172,7 @@ Sysmon.prototype.stop = function() {
 
 Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {type: 'reset'});
-  this[this.isRunning() ? 'start' : 'config'](_.clone(defaults));
+  this[this.isRunning() ? 'start' : 'config'](Object.assign({}, DEFAULT_CONFIG));
   return this;
 };
 
@@ -211,15 +200,10 @@ Sysmon.prototype.destroy = function() {
  */
 Sysmon.prototype.config = function(options) {
   /* Type detection is borrowed from Underscore.js */
-  // var type = typeof(options);
-  // if (type === 'function' || type === 'object' && !!obj) {
-  //   Object.assign(this._state.config, options);
-  //   this.sendEvent('config', {type: 'config'}, options: Object.assign({}, options));
-  // }
-
-  if(_.isObject(options)) {
-    _.extend(this._state.config, options);
-    this.sendEvent('config', {type: 'config', options: _.clone(options)});
+  var type = typeof options;
+  if((type === 'function' || type === 'object' && !!options)) {
+    Object.assign(this._state.config, options);
+    this.sendEvent('config', {type: 'config', options: Object.assign({}, options)});
   }
 
   return this._state.config;
@@ -248,7 +232,7 @@ Sysmon.prototype._isStopped = function() {
  */
 
 Sysmon.prototype._sanitizeNumber = function(n) {
-  if(!_.isNumber(n)) {
+  if(!isNaN(parseFloat(n)) && isFinite(n)) {
     throw new Error("Number expected");
   }
   if(!n || n < 0) {
@@ -261,41 +245,21 @@ Sysmon.prototype._sanitizeNumber = function(n) {
   return n;
 };
 
-/* TODO: The following functions should be rewritten as private */
-// Sysmon.prototype.seconds = function(n) {
-//   return this._sanitizeNumber(n * 1000)
-// }
-//
-// Sysmon.prototype.minutes = function(n) {
-//   return this._sanitizeNumber(n * this.seconds(60))
-// }
-//
-// Sysmon.prototype.hours = function(n) {
-//   return this._sanitizeNumber(n * this.minutes(60))
-// }
-//
-// Sysmon.prototype.days = function(n) {
-//   return this._sanitizeNumber(n * this.hours(24))
-// }
+Sysmon.prototype.seconds = function(n) {
+  return this._sanitizeNumber(n * 1000);
+};
 
-/**
- * Several functions extracted from Underscore.js
- */
-// Sysmon.prototype.isArray = nativeIsArray || function(obj) {
-//   return toString.call(obj) === '[object Array]'
-// }
-// Sysmon.prototype.isObject = function(o) {
-//   var type = typeof obj
-//   return type === 'function' || type === 'object' && !!obj
-// }
-// Sysmon.prototype.clone = function(obj) {
-//   var type = typeof obj
-//   if (!_.isObject(obj)) return obj;
-//   return _.isArray(obj) ? obj.slice() : _.extend({}, obj);
-// }
-// Sysmon.prototype.clone = function(arr) {
-//   // body...
-// }
+Sysmon.prototype.minutes = function(n) {
+  return this._sanitizeNumber(n * this.seconds(60));
+};
+
+Sysmon.prototype.hours = function(n) {
+  return this._sanitizeNumber(n * this.minutes(60));
+};
+
+Sysmon.prototype.days = function(n) {
+  return this._sanitizeNumber(n * this.hours(24));
+};
 
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;

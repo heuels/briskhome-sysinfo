@@ -1,6 +1,6 @@
 {
   "name": "briskhome-sysmon",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
