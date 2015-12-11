@@ -7,39 +7,62 @@
  */
 
 /*
-  TODO: Critical values should be declared as a const for now.
+  Checklist for v0.1.2:
+    - Move default event values to a separate const
+    v Put semicolons where possible
+    v Make use of 'util' module
+    - Use Object.assign instead of _.extend & _.clone
+ */
+
+/*
+  Checklist for v0.1.3:
+    - Get default values from DEFAULT_CONFIG
+    - Allow passing of both array and number to loadavg
+    - Settle with _isStopped and _isRunning
 */
-var util     = require('util'),
-    os       = require('os'),
-    _        = require('underscore'),
-    events   = require('events')
-    critical = os.cpus().length, // This property is to be removed in v0.1.2
-    defaults = {
-      delay     : 3000,
+
+/*
+  Checklist for v0.2.0:
+    - Remove all external dependencies
+    - Remove unnecessary variable declarations
+*/
+
+'use strict';
+
+/* Internal dependencies */
+var events   = require('events'),
+    util     = require('util'),
+    os       = require('os');
+
+/* External dependencies - marked for removal prior to v0.2.0 */
+var _        = require('underscore');
+
+/* Variable declarations - marked for removal prior to v0.2.0 */
+var critical = os.cpus().length, // This property is to be removed in v0.1.2
+    defaults = {                 // This property is to be removed in v0.1.3
+      delay     : 5000,
       critical1 : critical,
       critical5 : critical,
-      critical15: critical,
-      freemem   : 0, // SHOULD be either MB or per cent
+      critical15: '2.0',
+      freemem   : 0,
       uptime    : 0,
       silent    : false,
       immediate : false
-    }
+    };
 
 /*
-  TODO: Use this const as a default configuration object.
-  In v0.1.0 passing in the configuration to the start() is not planned.
+  Const DEFAULT_CONFIG should be used as a default configuration object.
 */
 const DEFAULT_CONFIG = {
-  delay : 3000,
-  critical1 : critical,
-  critical5 : critical,
-  critical15: critical,
-  freemem   : 0, // SHOULD be either MB or per cent
-  uptime    : 0,
-  silent    : false,
-  stream    : false, //DEPRECATED
-  immediate : false
-}
+  delay     : 5000,   // 5s.
+  silent    : false,  // By default Sysmon spams events every cycle.
+  immediate : false,  // This option should be renamed.
+  critical  : {
+    loadavg : os.cpus().length,
+    freemem : 0,
+    uptime  : 0
+  }
+};
 
 /**
  * The Sysmon class defines a system monitor object capable of checking
@@ -51,21 +74,18 @@ const DEFAULT_CONFIG = {
 function Sysmon() {
   /*
     In the constructor of Sysmon object, we use the call() method of
-    EventEmitter object, which executes the constructor method of
-    EventEmitter.
+    EventEmitter object, which executes the constructor method of EventEmitter.
   */
   events.EventEmitter.call(this);
   this._state = {
     running: false,
-    ended: false,
+    stopped: false,
     interval: undefined,
-    config: _.clone(defaults) // TODO: clone from underscore
-  }
+    config: Object.assign({}, DEFAULT_CONFIG)
+  };
 }
-/**
- * Copies all of the EventEmitter properties to the Sysmon object.
- */
-Sysmon.prototype.__proto__ = events.EventEmitter.prototype;
+
+util.inherits(Sysmon, events.EventEmitter);
 
 /**
  * Emits an event when something happens.
@@ -79,125 +99,135 @@ Sysmon.prototype.__proto__ = events.EventEmitter.prototype;
  * @param {object} obj Current set of captured stats.
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
-  var eventObj = (JSON.parse(JSON.stringify(obj)))
-  eventObj.timestamp = Math.floor(_.now() / 1000)
-  this.emit(event, eventObj)
-}
+  var eventObj = Object.assign({timestamp: Math.floor(+Date.now()/1000)}, obj);
+  this.emit(event, eventObj);
+};
 
 /**
- * Main function of the library. Checks the server stats and emits events when
- * necessary. Amount of output can be tuned with the truthy 'silent' parameter
- * in the options array.
+ * Checks the server stats and emits events when necessary.
+ *
+ * Amount of output can be tuned by setting the 'silent' option of the
+ * configuration to 'true'. If options array is present, then configuration is
+ * loaded from it. If no argument is passed then default configuration loaded.
  *
  * @param {Array} options A set of options passed from the declaration.
  * @returns {Sysmon}
  */
 Sysmon.prototype.start = function(options) {
-  var self = this
-  if (this._isEnded()) {
-    throw new Error("monitor has been ended by .destroy() method")
+  var _this = this;
+  if (_this._isStopped()) {
+    throw new Error('briskhome-sysmon has been destroyed by .destroy() method');
   }
-
-  //TODO: WHAT DOES IT DO?!
-  self.stop()
-    .config(options)
+  if (options) {
+    _this.config(options);
+  }
 
   /* Main cycle of the service */
-  var cycle = function() {
-    var info = {
-      loadavg  : os.loadavg(),
-      uptime   : os.uptime(),
-      freemem  : os.freemem(),
-      totalmem : os.totalmem()
-    },
-    config = self.config(),
-    freemem  = (config.freemem < 1) ? config.freemem * info.totalmem : config.freemem
+  var main = function() {
+    var data = {
+          loadavg  : os.loadavg(),
+          uptime   : os.uptime(),
+          freemem  : os.freemem(),
+          totalmem : os.totalmem()
+        },
+        config = _this.config(),
+        freemem = (config.freemem < 1) ? config.freemem * data.totalmem : config.freemem;
 
     if(!config.silent) {
-      self.sendEvent('monitor', _.extend({type: 'monitor'}, info))
+      _this.sendEvent('monitor', Object.assign({type: 'regular'}, data));
     }
     // TODO: Check if config.loadavg is array.
-    if(info.loadavg[0] > config.critical1) {
-      self.sendEvent('loadavg1', _.extend({type: 'loadavg1'}, info))
+    if(data.loadavg[0] > config.critical1) {
+      _this.sendEvent('loadavg1', _.extend({type: 'loadavg1'}, data));
     }
-    if(info.loadavg[1] > config.critical5) {
-      self.sendEvent('loadavg5', _.extend({type: 'loadavg5'}, info))
+    if(data.loadavg[1] > config.critical5) {
+      _this.sendEvent('loadavg5', _.extend({type: 'loadavg5'}, data));
     }
-    if(info.loadavg[2] > config.critical15) {
-      self.sendEvent('loadavg15', _.extend({type: 'loadavg15'}, info))
+    if(data.loadavg[2] > config.critical15) {
+      _this.sendEvent('loadavg15', _.extend({type: 'loadavg15'}, data));
     }
-    if(info.freemem < freemem) {
-      self.sendEvent('freemem', _.extend({type: 'freemem'}, info))
+    if(data.freemem < freemem) {
+      _this.sendEvent('freemem', _.extend({type: 'freemem'}, data));
     }
-    if(Number(config.uptime) && info.uptime > Number(config.uptime)) {
-      self.sendEvent('uptime', _.extend({type: 'uptime'}, info))
+    if(Number(config.uptime) && data.uptime > Number(config.uptime)) {
+      _this.sendEvent('uptime', _.extend({type: 'uptime'}, data));
     }
+  };
+
+  if(_this.config().immediate) {
+    process.nextTick(main);
+  }
+  _this._state.interval = setInterval(main, _this.config().delay);
+
+  if(!_this.isRunning()) {
+    _this._state.running = true;
+    _this.sendEvent('start', {type: 'start'});
   }
 
-  if(self.config().immediate) {
-    process.nextTick(cycle)
-  }
-  self._state.interval = setInterval(cycle, self.config().delay)
-
-  if(!self.isRunning()) {
-    self._state.running = true
-    self.sendEvent('start', {type: 'start'})
-  }
-
-  return self
-}
+  return _this;
+};
 
 /**
  * Stops the Sysmon execution at the beginning of the next loop.
  */
 Sysmon.prototype.stop = function() {
 
-  clearInterval(this._state.interval)
+  clearInterval(this._state.interval);
 
   if(this.isRunning()) {
-    this._state.running = false
-    this.sendEvent('stop', {type: 'stop'})
+    this._state.running = false;
+    this.sendEvent('stop', {type: 'stop'});
   }
-  return this
-}
+  return this;
+};
 
 Sysmon.prototype.reset = function() {
-  this.sendEvent('reset', {type: 'reset'})
-  this[this.isRunning() ? 'start' : 'config'](_.clone(defaults))
-  return this
-}
+  this.sendEvent('reset', {type: 'reset'});
+  this[this.isRunning() ? 'start' : 'config'](_.clone(defaults));
+  return this;
+};
 
 Sysmon.prototype.destroy = function() {
 
-  if(!this._isEnded()) {
-    this.sendEvent('destroy', {type: 'destroy'})
-    this.stop()
-    if(this instanceof stream.Readable) {
-      this.emit('close')
-      this.push(null)
-    }
-    this._state.ended = true
+  if(!this._isStopped()) {
+    this.sendEvent('destroy', {type: 'destroy'});
+    this.stop();
+    this._state.stopped = true;
   }
 
-  return this
-}
+  return this;
+};
 
+/**
+ * Configuration function. If module configuration is passed as an argument
+ * then is parsed applied to the corresponding Sysmon object. If no arguments
+ * present then it returns default or already installed configuration.
+ *
+ * @todo  Need to verify that options array actually is the configuration array.
+ *
+ * @param {Object} options Configuration object. Naming scheme can be viewed at
+ *        the begginning of the file in DEFAULT_CONFIG declaration.
+ * @returns {Object} Configuration of the current Sysmon instance.
+ */
 Sysmon.prototype.config = function(options) {
+  /* Type detection is borrowed from Underscore.js */
+  // var type = typeof(options);
+  // if (type === 'function' || type === 'object' && !!obj) {
+  //   Object.assign(this._state.config, options);
+  //   this.sendEvent('config', {type: 'config'}, options: Object.assign({}, options));
+  // }
 
   if(_.isObject(options)) {
-    _.extend(this._state.config, options)
-    this.sendEvent('config', {
-                               type: 'config',
-                               options: _.clone(options)
-                             })
+    _.extend(this._state.config, options);
+    this.sendEvent('config', {type: 'config', options: _.clone(options)});
   }
 
-  return this._state.config
-}
+  return this._state.config;
+};
 
 Sysmon.prototype.isRunning = function() {
-  return !!this._state.running
-}
+  return !!this._state.running;
+};
 
 /**
  * Checks whether Sysmon is running.
@@ -205,9 +235,9 @@ Sysmon.prototype.isRunning = function() {
  * @returns {Boolean} status True = running, false = stopped.
  * @private
  */
-Sysmon.prototype._isEnded = function() {
-  return !!this._state.ended
-}
+Sysmon.prototype._isStopped = function() {
+  return !!this._state.stopped;
+};
 
 /**
  * Numeric(-al?) helper methods.
@@ -219,17 +249,17 @@ Sysmon.prototype._isEnded = function() {
 
 Sysmon.prototype._sanitizeNumber = function(n) {
   if(!_.isNumber(n)) {
-    throw new Error("Number expected")
+    throw new Error("Number expected");
   }
   if(!n || n < 0) {
-    throw new Error("Number must be greater than 0")
+    throw new Error("Number must be greater than 0");
   }
   // Math.pow(2, 31)
   if(n >= 2147483648) {
-    throw new Error("Number must be smaller than 2147483648")
+    throw new Error("Number must be smaller than 2147483648");
   }
-  return n
-}
+  return n;
+};
 
 /* TODO: The following functions should be rewritten as private */
 // Sysmon.prototype.seconds = function(n) {
@@ -267,11 +297,8 @@ Sysmon.prototype._sanitizeNumber = function(n) {
 //   // body...
 // }
 
-// I don't think it is needed for me.
-Sysmon.prototype.os = os
-
-module.exports = new Sysmon()
-module.exports.Sysmon = Sysmon
+module.exports = new Sysmon();
+module.exports.Sysmon = Sysmon;
 
 
 // /**
