@@ -7,50 +7,34 @@
  */
 
 /*
-  Checklist for v0.1.3:
-    - Get default values from DEFAULT_CONFIG
-    - Allow passing of both array and number to loadavg
+  Roadmap for v0.1.3:
+    v Get default values from DEFAULT_CONFIG
+    v Allow passing of both array and number to loadavg
     - Settle with _isStopped and _isRunning
 */
 
 /*
-  Checklist for v0.2.0:
+  Roadmap for v0.2.0:
     v Remove all external dependencies
-    - Remove unnecessary variable declarations
+    v Remove unnecessary variable declarations
+    - Send valid JSON object with every event
 */
 
 'use strict';
 
-/* Internal dependencies */
-var events   = require('events'),
-    util     = require('util'),
-    os       = require('os');
+var events   = require('events');
+var util     = require('util');
+var os       = require('os');
 
-/* Variable declarations - marked for removal prior to v0.2.0 */
-var critical = os.cpus().length, // This property is to be removed in v0.1.2
-    defaults = {                 // This property is to be removed in v0.1.3
-      delay     : 5000,
-      critical1 : critical,
-      critical5 : critical,
-      critical15: '2.0',
-      freemem   : 0,
-      uptime    : 0,
-      silent    : false,
-      immediate : false
-    };
-
-/*
-  Const DEFAULT_CONFIG should be used as a default configuration object.
-*/
 var DEFAULT_CONFIG = {
-  delay     : 5000,   // 5s.
-  silent    : false,  // By default Sysmon spams events every cycle.
-  immediate : false,  // This option should be renamed.
-  critical  : {
-    loadavg : os.cpus().length,
-    freemem : 0,
-    uptime  : 0
-  }
+  delay: 5000,
+  silent: false,
+  continuous: false,
+  critical: {
+    loadavg: os.cpus().length,
+    freemem: 0,
+    uptime: 0,
+  },
 };
 
 /**
@@ -70,7 +54,7 @@ function Sysmon() {
     running: false,
     stopped: false,
     interval: undefined,
-    config: Object.assign({}, DEFAULT_CONFIG)
+    config: Object.assign({}, DEFAULT_CONFIG),
   };
 }
 
@@ -88,7 +72,8 @@ util.inherits(Sysmon, events.EventEmitter);
  * @param {object} obj Current set of captured stats.
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
-  var eventObj = Object.assign({timestamp: Math.floor(+Date.now()/1000)}, obj);
+  var curtime = Math.floor(+Date.now() / 1000);
+  var eventObj = Object.assign({timestamp: curtime}, obj);
   this.emit(event, eventObj);
 };
 
@@ -111,48 +96,45 @@ Sysmon.prototype.start = function(options) {
     _this.config(options);
   }
 
-  /* Main cycle of the service */
+  // Main cycle of the service
   var main = function() {
     var data = {
-          loadavg  : os.loadavg(),
-          uptime   : os.uptime(),
-          freemem  : os.freemem(),
-          totalmem : os.totalmem()
-        },
-        config = _this.config(),
-        freemem = (config.freemem < 1) ? config.freemem * data.totalmem : config.freemem;
-
-    if(!config.silent) {
-      _this.sendEvent('monitor', Object.assign({type: 'regular'}, data));
+      loadavg: os.loadavg(),
+      uptime: os.uptime(),
+      freemem: os.freemem(),
+      totalmem: os.totalmem(),
+    };
+    var config = _this.config();
+    var freemem = (config.critical.freemem < 1) /* jshint -W014 */
+      ? config.critical.freemem * data.totalmem /* jshint +W014 */
+      : config.critical.freemem;
+    if (!config.silent) {
+      _this.sendEvent('event', Object.assign({type: 'regular'}, data));
     }
-    // TODO: Check if config.loadavg is array.
-    if(data.loadavg[0] > config.critical1) {
+    if (data.loadavg[0] > config.critical.loadavg[0]) {
       _this.sendEvent('loadavg1', Object.assign({type: 'loadavg1'}, data));
     }
-    if(data.loadavg[1] > config.critical5) {
+    if (data.loadavg[1] > config.critical.loadavg[1]) {
       _this.sendEvent('loadavg5', Object.assign({type: 'loadavg5'}, data));
     }
-    if(data.loadavg[2] > config.critical15) {
+    if (data.loadavg[2] > config.critical.loadavg[2]) {
       _this.sendEvent('loadavg15', Object.assign({type: 'loadavg15'}, data));
     }
-    if(data.freemem < freemem) {
+    if (data.freemem < freemem) {
       _this.sendEvent('freemem', Object.assign({type: 'freemem'}, data));
     }
-    if(Number(config.uptime) && data.uptime > Number(config.uptime)) {
+    if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
       _this.sendEvent('uptime', Object.assign({type: 'uptime'}, data));
     }
   };
-
-  if(_this.config().immediate) {
+  if (_this.config().continuous) {
     process.nextTick(main);
   }
   _this._state.interval = setInterval(main, _this.config().delay);
-
-  if(!_this.isRunning()) {
+  if (!_this.isRunning()) {
     _this._state.running = true;
     _this.sendEvent('start', {type: 'start'});
   }
-
   return _this;
 };
 
@@ -163,7 +145,7 @@ Sysmon.prototype.stop = function() {
 
   clearInterval(this._state.interval);
 
-  if(this.isRunning()) {
+  if (this.isRunning()) {
     this._state.running = false;
     this.sendEvent('stop', {type: 'stop'});
   }
@@ -172,18 +154,18 @@ Sysmon.prototype.stop = function() {
 
 Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {type: 'reset'});
-  this[this.isRunning() ? 'start' : 'config'](Object.assign({}, DEFAULT_CONFIG));
+  this[this.isRunning() ? 'start' : 'config']
+    (Object.assign({}, DEFAULT_CONFIG));
   return this;
 };
 
 Sysmon.prototype.destroy = function() {
 
-  if(!this._isStopped()) {
+  if (!this._isStopped()) {
     this.sendEvent('destroy', {type: 'destroy'});
     this.stop();
     this._state.stopped = true;
   }
-
   return this;
 };
 
@@ -200,12 +182,21 @@ Sysmon.prototype.destroy = function() {
  */
 Sysmon.prototype.config = function(options) {
   /* Type detection is borrowed from Underscore.js */
-  var type = typeof options;
-  if((type === 'function' || type === 'object' && !!options)) {
+  var optType = typeof options;
+  var argType = typeof options.critical.loadavg;
+  if ((optType === 'function' || optType === 'object' && !!options)) {
+    if (argType === 'string' || argType instanceof String) {
+      console.log(options.critical.loadavg);
+      var loadavg = options.critical.loadavg;
+      options.critical.loadavg = [loadavg, loadavg, loadavg];
+      console.log(options.critical.loadavg);
+    }
     Object.assign(this._state.config, options);
-    this.sendEvent('config', {type: 'config', options: Object.assign({}, options)});
+    this.sendEvent('config', {
+      type: 'config',
+      options: Object.assign({}, options),
+    });
   }
-
   return this._state.config;
 };
 
@@ -232,15 +223,15 @@ Sysmon.prototype._isStopped = function() {
  */
 
 Sysmon.prototype._sanitizeNumber = function(n) {
-  if(!isNaN(parseFloat(n)) && isFinite(n)) {
-    throw new Error("Number expected");
+  if (!isNaN(parseFloat(n)) && isFinite(n)) {
+    throw new Error('Number expected');
   }
-  if(!n || n < 0) {
-    throw new Error("Number must be greater than 0");
+  if (!n || n < 0) {
+    throw new Error('Number must be greater than 0');
   }
   // Math.pow(2, 31)
-  if(n >= 2147483648) {
-    throw new Error("Number must be smaller than 2147483648");
+  if (n >= 2147483648) {
+    throw new Error('Number must be smaller than 2147483648');
   }
   return n;
 };
@@ -263,67 +254,3 @@ Sysmon.prototype.days = function(n) {
 
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;
-
-
-// /**
-//  *
-//  *
-//  *
-//  */
-//
-// module.exports = function(callback) {
-//   // var clim = clim("system", console)
-//   // var console = clim
-//
-//   var exec = require('child_process').exec
-//   var os = require('os')
-//
-//   var res = []
-//   res['hostname'] = os.hostname()
-//   res['arch'] = os.arch()
-//
-//   // Checking free memory
-//   exec('df -k', function(err, stdout, stderr) {
-//     if (err) console.error('Unable to execute df -k. Will now quit.')
-//
-//     var regex = /(\S*)\s+(\d+)\s+(\d+)\s+(\d+)\s+\d+%\s+(\S+)/g
-//     var df
-//     while ((df = regex.exec(stdout)) !== null) {
-//       res['memory'] = {
-//         'device': df[1],
-//         'available': df[4],
-//         'used': df[3],
-//         'capacity': df[2],
-//         'mount': df[5]
-//       }
-//     }
-//     console.log("%s", res)
-//     callback(null, res)
-//   })
-// }
-//
-// // var demo = {
-// //   'hostname': 'maedhros',
-// //   'arch': 'amd64',
-// //   'memory': {
-// //     [
-// //       'device': '/dev/disk1',
-// //       'available': '12345',
-// //       'used': '12345',
-// //       'capacity': '12345',
-// //       'mount': '/dev/media'
-// //     ],
-// //     [
-// //       'device': '/dev/disk2',
-// //       'available': '12345',
-// //       'used': '12345',
-// //       'capacity': '12345',
-// //       'mount': '/dev/media'
-// //     ]
-// //   },
-// //   'cpu': [
-// //     'curload': '1.0',
-// //     'avgload': '1.5',
-// //     '15mload': '2.0'
-// //   ]
-// // }
