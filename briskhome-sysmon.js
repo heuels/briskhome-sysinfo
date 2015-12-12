@@ -175,21 +175,25 @@ Sysmon.prototype.destroy = function() {
  * then is parsed applied to the corresponding Sysmon object. If no arguments
  * present then it returns default or already installed configuration.
  *
- * @todo  Need to throw an error if options object has wrong content.
- *
  * @param {Object} options Configuration object. Naming scheme can be viewed at
  *        the begginning of the file in DEFAULT_CONFIG declaration.
  * @returns {Object} Configuration of the current Sysmon instance.
  */
 Sysmon.prototype.config = function(options) {
-  var optType = typeof options;
-  var argType = typeof options.threshold.loadavg;
-  if ((optType === 'function' || optType === 'object' && !!options)) {
-    if (argType === 'string' || argType instanceof String) {
-      console.log(options.threshold.loadavg);
+  if (options) {
+    if (options !== Object(options)) {
+      throw new Error('Configuration object is of wrong type.');
+    }
+    if ('threshold' in options && 'loadavg' in options.threshold) {
       var loadavg = options.threshold.loadavg;
-      options.threshold.loadavg = [loadavg, loadavg, loadavg];
-      console.log(options.threshold.loadavg);
+      if (loadavg.constructor === String) {
+        options.threshold.loadavg = [loadavg, loadavg, loadavg];
+      }
+      if (loadavg.constructor === Array) {
+        if (loadavg.length !== 3) {
+          throw new Error('Loadavg array should contain 3 items.');
+        }
+      }
     }
     Object.assign(this._state.config, options);
     this.sendEvent('config', {
