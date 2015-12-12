@@ -13,10 +13,10 @@ var util     = require('util');
 var os       = require('os');
 
 var DEFAULT_CONFIG = {
+  loop: false,
   delay: 5000,
   silent: false,
-  continuous: false,
-  critical: {
+  threshold: {
     loadavg: os.cpus().length,
     freemem: 0,
     uptime: 0,
@@ -90,41 +90,41 @@ Sysmon.prototype.start = function(options) {
       totalmem: os.totalmem(),
     };
     var config = _this.config();
-    var freemem = (config.critical.freemem < 1) /* jshint -W014 */
-      ? config.critical.freemem * data.totalmem /* jshint +W014 */
-      : config.critical.freemem;
+    var freemem = (config.threshold.freemem < 1)
+      ? config.threshold.freemem * data.totalmem
+      : config.threshold.freemem;
     if (!config.silent) {
       _this.sendEvent('event', Object.assign({
         type: 'regular',
       }, data));
     }
-    if (data.loadavg[0] > config.critical.loadavg[0]) {
-      _this.sendEvent('critical-loadavg1', Object.assign({
-        type: 'critical-loadavg1',
+    if (data.loadavg[0] > config.threshold.loadavg[0]) {
+      _this.sendEvent('threshold-loadavg1', Object.assign({
+        type: 'threshold-loadavg1',
       }, data));
     }
-    if (data.loadavg[1] > config.critical.loadavg[1]) {
-      _this.sendEvent('critical-loadavg5', Object.assign({
-        type: 'critical-loadavg5',
+    if (data.loadavg[1] > config.threshold.loadavg[1]) {
+      _this.sendEvent('threshold-loadavg5', Object.assign({
+        type: 'threshold-loadavg5',
       }, data));
     }
-    if (data.loadavg[2] > config.critical.loadavg[2]) {
-      _this.sendEvent('critical-loadavg15', Object.assign({
-        type: 'critical-loadavg15',
+    if (data.loadavg[2] > config.threshold.loadavg[2]) {
+      _this.sendEvent('threshold-loadavg15', Object.assign({
+        type: 'threshold-loadavg15',
       }, data));
     }
     if (data.freemem < freemem) {
-      _this.sendEvent('critical-freemem', Object.assign({
-        type: 'critical-freemem',
+      _this.sendEvent('threshold-freemem', Object.assign({
+        type: 'threshold-freemem',
       }, data));
     }
     if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
-      _this.sendEvent('critical-uptime', Object.assign({
-        type: 'critical-uptime',
+      _this.sendEvent('threshold-uptime', Object.assign({
+        type: 'threshold-uptime',
       }, data));
     }
   };
-  if (_this.config().continuous) {
+  if (_this.config().loop) {
     process.nextTick(main);
   }
   _this._state.interval = setInterval(main, _this.config().delay);
@@ -183,13 +183,13 @@ Sysmon.prototype.destroy = function() {
  */
 Sysmon.prototype.config = function(options) {
   var optType = typeof options;
-  var argType = typeof options.critical.loadavg;
+  var argType = typeof options.threshold.loadavg;
   if ((optType === 'function' || optType === 'object' && !!options)) {
     if (argType === 'string' || argType instanceof String) {
-      console.log(options.critical.loadavg);
-      var loadavg = options.critical.loadavg;
-      options.critical.loadavg = [loadavg, loadavg, loadavg];
-      console.log(options.critical.loadavg);
+      console.log(options.threshold.loadavg);
+      var loadavg = options.threshold.loadavg;
+      options.threshold.loadavg = [loadavg, loadavg, loadavg];
+      console.log(options.threshold.loadavg);
     }
     Object.assign(this._state.config, options);
     this.sendEvent('config', {
