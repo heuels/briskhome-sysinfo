@@ -10,7 +10,7 @@
   Roadmap for v0.1.3:
     v Get default values from DEFAULT_CONFIG
     v Allow passing of both array and number to loadavg
-    - Settle with _isStopped and _isRunning
+    v Settle with _isStopped and _isRunning
 */
 
 /*
@@ -78,6 +78,7 @@ Sysmon.prototype.sendEvent = function(event, obj) {
 };
 
 /**
+ * Starts Sysmon instance.
  * Checks the server stats and emits events when necessary.
  *
  * Amount of output can be tuned by setting the 'silent' option of the
@@ -95,8 +96,6 @@ Sysmon.prototype.start = function(options) {
   if (options) {
     _this.config(options);
   }
-
-  // Main cycle of the service
   var main = function() {
     var data = {
       loadavg: os.loadavg(),
@@ -109,22 +108,34 @@ Sysmon.prototype.start = function(options) {
       ? config.critical.freemem * data.totalmem /* jshint +W014 */
       : config.critical.freemem;
     if (!config.silent) {
-      _this.sendEvent('event', Object.assign({type: 'regular'}, data));
+      _this.sendEvent('event', Object.assign({
+        type: 'regular',
+      }, data));
     }
     if (data.loadavg[0] > config.critical.loadavg[0]) {
-      _this.sendEvent('loadavg1', Object.assign({type: 'loadavg1'}, data));
+      _this.sendEvent('critical-loadavg1', Object.assign({
+        type: 'critical-loadavg1',
+      }, data));
     }
     if (data.loadavg[1] > config.critical.loadavg[1]) {
-      _this.sendEvent('loadavg5', Object.assign({type: 'loadavg5'}, data));
+      _this.sendEvent('critical-loadavg5', Object.assign({
+        type: 'critical-loadavg5',
+      }, data));
     }
     if (data.loadavg[2] > config.critical.loadavg[2]) {
-      _this.sendEvent('loadavg15', Object.assign({type: 'loadavg15'}, data));
+      _this.sendEvent('critical-loadavg15', Object.assign({
+        type: 'critical-loadavg15',
+      }, data));
     }
     if (data.freemem < freemem) {
-      _this.sendEvent('freemem', Object.assign({type: 'freemem'}, data));
+      _this.sendEvent('critical-freemem', Object.assign({
+        type: 'critical-freemem',
+      }, data));
     }
     if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
-      _this.sendEvent('uptime', Object.assign({type: 'uptime'}, data));
+      _this.sendEvent('critical-uptime', Object.assign({
+        type: 'critical-uptime',
+      }, data));
     }
   };
   if (_this.config().continuous) {
@@ -139,12 +150,11 @@ Sysmon.prototype.start = function(options) {
 };
 
 /**
- * Stops the Sysmon execution at the beginning of the next loop.
+ * Stops execution of Sysmon instance. Clears the interval that was set for
+ * execution of main() function and emits a 'stop' event.
  */
 Sysmon.prototype.stop = function() {
-
   clearInterval(this._state.interval);
-
   if (this.isRunning()) {
     this._state.running = false;
     this.sendEvent('stop', {type: 'stop'});
@@ -152,6 +162,9 @@ Sysmon.prototype.stop = function() {
   return this;
 };
 
+/**
+ * Restarts and reconfigures Sysmon instance.
+ */
 Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {type: 'reset'});
   this[this.isRunning() ? 'start' : 'config']
@@ -159,8 +172,10 @@ Sysmon.prototype.reset = function() {
   return this;
 };
 
+/**
+ * Destroys Sysmon instance and emits a 'destroy' event.
+ */
 Sysmon.prototype.destroy = function() {
-
   if (!this._isStopped()) {
     this.sendEvent('destroy', {type: 'destroy'});
     this.stop();
@@ -174,14 +189,13 @@ Sysmon.prototype.destroy = function() {
  * then is parsed applied to the corresponding Sysmon object. If no arguments
  * present then it returns default or already installed configuration.
  *
- * @todo  Need to verify that options array actually is the configuration array.
+ * @todo  Need to throw an error if options object has wrong content.
  *
  * @param {Object} options Configuration object. Naming scheme can be viewed at
  *        the begginning of the file in DEFAULT_CONFIG declaration.
  * @returns {Object} Configuration of the current Sysmon instance.
  */
 Sysmon.prototype.config = function(options) {
-  /* Type detection is borrowed from Underscore.js */
   var optType = typeof options;
   var argType = typeof options.critical.loadavg;
   if ((optType === 'function' || optType === 'object' && !!options)) {
@@ -215,13 +229,12 @@ Sysmon.prototype._isStopped = function() {
 };
 
 /**
- * Numeric(-al?) helper methods.
+ * Various helper methods.
  * The main function checks whether an argument is an acceptable number.
  * Additional functions help quickly convert timestamps to any measure possible.
  *
  * @param {Number} n A number that should be sanitized or converted.
  */
-
 Sysmon.prototype._sanitizeNumber = function(n) {
   if (!isNaN(parseFloat(n)) && isFinite(n)) {
     throw new Error('Number expected');
