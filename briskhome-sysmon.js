@@ -3,22 +3,8 @@
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.1.2
+ * @version 0.1.3
  */
-
-/*
-  Roadmap for v0.1.3:
-    v Get default values from DEFAULT_CONFIG
-    v Allow passing of both array and number to loadavg
-    v Settle with _isStopped and _isRunning
-*/
-
-/*
-  Roadmap for v0.2.0:
-    v Remove all external dependencies
-    v Remove unnecessary variable declarations
-    - Send valid JSON object with every event
-*/
 
 'use strict';
 
