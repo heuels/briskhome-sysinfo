@@ -18,8 +18,8 @@ var DEFAULT_CONFIG = {
   silent: false,
   threshold: {
     loadavg: os.cpus().length,
-    freemem: 0,
-    uptime: 0,
+    freemem: 50,
+    uptime: 50,
   },
 };
 
@@ -59,7 +59,9 @@ util.inherits(Sysmon, events.EventEmitter);
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
   var curtime = Math.floor(+Date.now() / 1000);
-  var eventObj = Object.assign({timestamp: curtime}, obj);
+  var eventObj = Object.assign({
+    timestamp: curtime,
+  }, obj);
   this.emit(event, eventObj);
 };
 
@@ -80,8 +82,10 @@ Sysmon.prototype.start = function(options) {
     throw new Error('briskhome-sysmon has been destroyed by .destroy() method');
   }
   if (options) {
-    _this.config(options);
+    //
   }
+  _this.stop();
+  _this.config(options);
   var main = function() {
     var data = {
       loadavg: os.loadavg(),
@@ -130,7 +134,9 @@ Sysmon.prototype.start = function(options) {
   _this._state.interval = setInterval(main, _this.config().delay);
   if (!_this.isRunning()) {
     _this._state.running = true;
-    _this.sendEvent('start', {type: 'start'});
+    _this.sendEvent('start', {
+      type: 'start',
+    });
   }
   return _this;
 };
@@ -143,7 +149,9 @@ Sysmon.prototype.stop = function() {
   clearInterval(this._state.interval);
   if (this.isRunning()) {
     this._state.running = false;
-    this.sendEvent('stop', {type: 'stop'});
+    this.sendEvent('stop', {
+      type: 'stop',
+    });
   }
   return this;
 };
@@ -152,7 +160,9 @@ Sysmon.prototype.stop = function() {
  * Restarts and reconfigures Sysmon instance.
  */
 Sysmon.prototype.reset = function() {
-  this.sendEvent('reset', {type: 'reset'});
+  this.sendEvent('reset', {
+    type: 'reset',
+  });
   this[this.isRunning() ? 'start' : 'config']
     (Object.assign({}, DEFAULT_CONFIG));
   return this;
@@ -163,7 +173,9 @@ Sysmon.prototype.reset = function() {
  */
 Sysmon.prototype.destroy = function() {
   if (!this._isStopped()) {
-    this.sendEvent('destroy', {type: 'destroy'});
+    this.sendEvent('destroy', {
+      type: 'destroy',
+    });
     this.stop();
     this._state.stopped = true;
   }
@@ -181,13 +193,37 @@ Sysmon.prototype.destroy = function() {
  */
 Sysmon.prototype.config = function(options) {
   if (options) {
-    if (options !== Object(options)) {
+    if (options.constructor !== Object) {
       throw new Error('Configuration object is of wrong type.');
+    }
+    if ('delay' in options && !this.isNumeric(options.delay)) {
+      throw new Error('Option \'delay\' should be a number.');
+    }
+    if ('silent' in options && typeof options.silent !== 'boolean') {
+      throw new Error('Option \'silent\' should be a boolean.');
+    }
+    if ('loop' in options && (typeof options.loop !== 'boolean')) {
+      throw new Error('Option \'loop\' should be a boolean.');
+    }
+    if ('threshold' in options && (options.threshold.constructor !== Object)) {
+      throw new Error('Option \'threshold\' should be an object.');
+    }
+    if ('threshold' in options && 'freemem' in options.threshold) {
+      var freemem = options.threshold.freemem;
+      if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
+        throw new Error('Option \'freemem\' should be a Number.');
+      }
+    }
+    if ('threshold' in options && 'uptime' in options.threshold) {
+      var uptime = options.threshold.uptime;
+      if (!this.isNumeric(uptime)) {
+        throw new Error('Option \'uptime\' should be a Number.');
+      }
     }
     if ('threshold' in options && 'loadavg' in options.threshold) {
       var loadavg = options.threshold.loadavg;
       if (loadavg.constructor === String) {
-        options.threshold.loadavg = [loadavg, loadavg, loadavg];
+        options.threshold.loadavg = [loadavg + '', loadavg + '', loadavg + ''];
       }
       if (loadavg.constructor === Array) {
         if (loadavg.length !== 3) {
@@ -198,20 +234,26 @@ Sysmon.prototype.config = function(options) {
     Object.assign(this._state.config, options);
     this.sendEvent('config', {
       type: 'config',
-      options: Object.assign({}, options),
+      config: Object.assign({}, options),
     });
   }
   return this._state.config;
 };
 
+/**
+ * Checks whether Sysmon is active and running.
+ *
+ * @returns {Boolean} status True = running, false = stopped.
+ * @private
+ */
 Sysmon.prototype.isRunning = function() {
   return !!this._state.running;
 };
 
 /**
- * Checks whether Sysmon is running.
+ * Checks whether Sysmon is destroyed.
  *
- * @returns {Boolean} status True = running, false = stopped.
+ * @returns {Boolean} status True = destroyed, false = active.
  * @private
  */
 Sysmon.prototype._isStopped = function() {
@@ -225,18 +267,8 @@ Sysmon.prototype._isStopped = function() {
  *
  * @param {Number} n A number that should be sanitized or converted.
  */
-Sysmon.prototype._sanitizeNumber = function(n) {
-  if (!isNaN(parseFloat(n)) && isFinite(n)) {
-    throw new Error('Number expected');
-  }
-  if (!n || n < 0) {
-    throw new Error('Number must be greater than 0');
-  }
-  // Math.pow(2, 31)
-  if (n >= 2147483648) {
-    throw new Error('Number must be smaller than 2147483648');
-  }
-  return n;
+Sysmon.prototype.isNumeric = function(n) {
+  return !isNaN(parseFloat(n)) && isFinite(n);
 };
 
 Sysmon.prototype.seconds = function(n) {
