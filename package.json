@@ -1,15 +1,19 @@
 {
   "name": "briskhome-sysmon",
-  "version": "0.1.3",
+  "version": "0.2.0",
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "mocha briskhome-sysmon.test.js"
   },
   "author": "Egor Zaitsev <ezaitsev@briskhome.com>",
   "license": "ISC",
-  "engines" : {
-    "node" : ">=4.0.0"
+  "engines": {
+    "node": ">=4.0.0"
   },
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "chai": "^3.4.1",
+    "mock-os": "0.0.1"
+  }
 }
