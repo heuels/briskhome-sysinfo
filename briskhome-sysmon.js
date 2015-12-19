@@ -3,7 +3,7 @@
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.1.4
+ * @version 0.2.0
  */
 
 'use strict';
