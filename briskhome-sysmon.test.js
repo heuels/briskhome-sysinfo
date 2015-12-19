@@ -1,10 +1,10 @@
 /**
-* Briskhome system monitor tests <briskhome-sysmon.test.js>
-* Part of Briskhome house monitoring service.
-*
-* @author Egor Zaitsev <ezaitsev@briskhome.com>
-* @version 0.1.3
-*/
+ * Briskhome system monitor tests <briskhome-sysmon.test.js>
+ * Part of Briskhome house monitoring service.
+ *
+ * @author Egor Zaitsev <ezaitsev@briskhome.com>
+ * @version 0.1.4
+ */
 
 'use strict';
 
@@ -200,23 +200,108 @@ describe('Sysmon.config() ', () => {
     });
   });
   describe('- threshold.uptime', () => {
-    it('threshold.uptime', function() {
+    it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({
-          threshold: {
-            uptime: 'test',
-          },
-        });
+        sysmon.start({ threshold: { uptime: true, }, });
+      });
+    });
+    it('should not accept a date', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { uptime: new Date(), }, });
+      });
+    });
+    it('should not accept an array', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { uptime: ['test'], }, });
+      });
+    });
+    it('should not accept an object', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { uptime: {test: 'test', }, }, });
+      });
+    });
+    it('should not accept a string', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { uptime: 'test', }, });
+      });
+    });
+    it('should accept a number', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { uptime: 123456789, }, });
+      });
+    });
+    it('should accept a number as a string', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { uptime: '123456789', }, });
       });
     });
   });
   describe('- threshold.loadavg', () => {
-    it('threshold.loadavg', function() {
+    it('should not accept a boolean', function() {
       assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: true, }, });
+      });
+    });
+    it('should not accept a date', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: new Date(), }, });
+      });
+    });
+    it('should not accept an object', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: {test: 'test', }, }, });
+      });
+    });
+    it('should not accept a string', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: 'test', }, });
+      });
+    });
+    it('should accept a number', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { loadavg: 123456789, }, });
+      });
+    });
+    it('should accept a number as a string', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { loadavg: '123456789', }, });
+      });
+    });
+    it('should not accept an array if it does not contain strings', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: ['test', 'test'], }, });
+      });
+    });
+    it('should not accept an array if it does not contain strings', function() {
+      assert.throws(function() {
+        sysmon.start({ threshold: { loadavg: ['test', 'test', 'test'], }, });
+      });
+    });
+    it('should accept an array with 3 numbers', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { loadavg: [1234, 1234, 1234], }, });
+      });
+    });
+    it('should accept an array with 3 numbers as strings', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start({ threshold: { loadavg: ['1234', '1234', '1234'], }, });
+      });
+    });
+  });
+  describe('Miscellaneous tests:', () => {
+    it('Issue #1: should save default configuration', function() {
+      assert.doesNotThrow(function() {
+        sysmon.start();
+        var uptime = sysmon.config().threshold.uptime;
         sysmon.start({
           threshold: {
-            loadavg: ['123', '123'],
+            test: 'test',
           },
+        });
+        sysmon.on('config', function(event) {
+          if (event.threshold.uptime !== uptime) {
+            throw new Error('Does not save default state!');
+          }
         });
       });
     });

@@ -3,7 +3,7 @@
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.1.3
+ * @version 0.1.4
  */
 
 'use strict';
@@ -192,52 +192,20 @@ Sysmon.prototype.destroy = function() {
  * @returns {Object} Configuration of the current Sysmon instance.
  */
 Sysmon.prototype.config = function(options) {
+  var self = this;
   if (options) {
-    if (options.constructor !== Object) {
-      throw new Error('Configuration object is of wrong type.');
-    }
-    if ('delay' in options && !this.isNumeric(options.delay)) {
-      throw new Error('Option \'delay\' should be a number.');
-    }
-    if ('silent' in options && typeof options.silent !== 'boolean') {
-      throw new Error('Option \'silent\' should be a boolean.');
-    }
-    if ('loop' in options && (typeof options.loop !== 'boolean')) {
-      throw new Error('Option \'loop\' should be a boolean.');
-    }
-    if ('threshold' in options && (options.threshold.constructor !== Object)) {
-      throw new Error('Option \'threshold\' should be an object.');
-    }
-    if ('threshold' in options && 'freemem' in options.threshold) {
-      var freemem = options.threshold.freemem;
-      if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
-        throw new Error('Option \'freemem\' should be a Number.');
+    self._sanitizeConfig(options, function(err, options) {
+      if (err) {
+        throw new Error(err);
       }
-    }
-    if ('threshold' in options && 'uptime' in options.threshold) {
-      var uptime = options.threshold.uptime;
-      if (!this.isNumeric(uptime)) {
-        throw new Error('Option \'uptime\' should be a Number.');
-      }
-    }
-    if ('threshold' in options && 'loadavg' in options.threshold) {
-      var loadavg = options.threshold.loadavg;
-      if (loadavg.constructor === String) {
-        options.threshold.loadavg = [loadavg + '', loadavg + '', loadavg + ''];
-      }
-      if (loadavg.constructor === Array) {
-        if (loadavg.length !== 3) {
-          throw new Error('Loadavg array should contain 3 items.');
-        }
-      }
-    }
-    Object.assign(this._state.config, options);
-    this.sendEvent('config', {
-      type: 'config',
-      config: Object.assign({}, options),
+      Object.assign(self._state.config, options);
+      self.sendEvent('config', {
+        type: 'config',
+        config: Object.assign({}, options),
+      });
     });
   }
-  return this._state.config;
+  return self._state.config;
 };
 
 /**
@@ -269,6 +237,53 @@ Sysmon.prototype._isStopped = function() {
  */
 Sysmon.prototype.isNumeric = function(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
+};
+
+Sysmon.prototype._sanitizeConfig = function(options, callback) {
+  if (options.constructor !== Object) {
+    callback('Configuration object is of wrong type.');
+  }
+  if ('delay' in options && !this.isNumeric(options.delay)) {
+    callback('Option \'delay\' should be a number.');
+  }
+  if ('silent' in options && typeof options.silent !== 'boolean') {
+    callback('Option \'silent\' should be a boolean.');
+  }
+  if ('loop' in options && (typeof options.loop !== 'boolean')) {
+    callback('Option \'loop\' should be a boolean.');
+  }
+  if ('threshold' in options && (options.threshold.constructor !== Object)) {
+    callback('Option \'threshold\' should be an object.');
+  }
+  if ('threshold' in options && 'freemem' in options.threshold) {
+    var freemem = options.threshold.freemem;
+    if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
+      callback('Option \'freemem\' should be a Number.');
+    }
+  }
+  if ('threshold' in options && 'uptime' in options.threshold) {
+    var uptime = options.threshold.uptime;
+    if (!this.isNumeric(uptime)) {
+      callback('Option \'uptime\' should be a Number.');
+    }
+  }
+  if ('threshold' in options && 'loadavg' in options.threshold) {
+    var loadavg = options.threshold.loadavg;
+    if (this.isNumeric(loadavg)) {
+      options.threshold.loadavg = [loadavg, loadavg, loadavg];
+    } else if (loadavg.constructor === Array) {
+      if (loadavg.length !== 3 || loadavg.every(function(item, i, arr) {
+        if (!this.isNumeric(item)) {
+          callback('Option \'loadavg\' should be a Number or an Array.');
+        }
+      }, this)) {
+        callback('Option \'loadavg\' should contain an Array with 3 items.');
+      }
+    } else {
+      callback('Option \'loadavg\' should be a Number or an Array.');
+    }
+  }
+  callback(null, options);
 };
 
 Sysmon.prototype.seconds = function(n) {
