@@ -1,5 +1,5 @@
 /**
- * Briskhome system monitor tests <briskhome-sysmon.test.js>
+ * Briskhome system monitor tests <briskhome-sysmon.spec.js>
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
@@ -14,7 +14,6 @@
 /* globals afterEach: false*/
 
 var assert = require('chai').assert;
-var mock = require('mock-os');
 
 var sysmon = require('./briskhome-sysmon');
 var os = require('os');

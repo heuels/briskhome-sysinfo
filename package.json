@@ -4,7 +4,7 @@
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
-    "test": "mocha briskhome-sysmon.test.js"
+    "test": "mocha briskhome-sysmon.spec.js"
   },
   "author": "Egor Zaitsev <ezaitsev@briskhome.com>",
   "license": "ISC",
