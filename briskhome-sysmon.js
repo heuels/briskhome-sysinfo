@@ -192,20 +192,20 @@ Sysmon.prototype.destroy = function() {
  * @returns {Object} Configuration of the current Sysmon instance.
  */
 Sysmon.prototype.config = function(options) {
-  var self = this;
+  var _this = this;
   if (options) {
-    self._sanitizeConfig(options, function(err, options) {
+    _this._sanitizeConfig(options, function(err, options) {
       if (err) {
         throw new Error(err);
       }
-      Object.assign(self._state.config, options);
-      self.sendEvent('config', {
+      Object.assign(_this._state.config, options);
+      _this.sendEvent('config', {
         type: 'config',
         config: Object.assign({}, options),
       });
     });
   }
-  return self._state.config;
+  return _this._state.config;
 };
 
 /**
