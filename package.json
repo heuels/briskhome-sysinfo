@@ -1,5 +1,5 @@
 {
-  "name": "briskhome-sysmon",
+  "name": "@briskhome/sysmon",
   "version": "0.2.0",
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
@@ -15,5 +15,10 @@
   "devDependencies": {
     "chai": "^3.4.1",
     "mock-os": "0.0.1"
+  },
+  "dependencies": {
+    "async": "^1.5.2",
+    "current-processes": "^0.2.1",
+    "dhcpd-leases": "0.0.1"
   }
 }

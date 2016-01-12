@@ -2,23 +2,34 @@
  * Briskhome system monitor <briskhome-sysmon.js>
  * Part of Briskhome house monitoring service.
  *
+ * Based on 'os-monitor' package by lfortin
+ * (https://github.com/lfortin/node-os-monitor)
+ *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
  * @version 0.2.0
  */
 
 'use strict';
 
-var events   = require('events');
-var util     = require('util');
-var os       = require('os');
+var events = require('events');
+var exec = require('child_process').exec;
+var util = require('util');
+var os = require('os');
+
+var async = require('async');
+var df = require('node-diskfree');
+var ps = require('current-processes');
+var leases = require('dhcpd-leases');
 
 var DEFAULT_CONFIG = {
   loop: false,
   delay: 5000,
   silent: false,
+  verbose: true,
   threshold: {
     loadavg: os.cpus().length,
-    freemem: 50,
+    freehdd: 0.5,
+    freeram: 50,
     uptime: 50,
   },
 };
@@ -39,7 +50,7 @@ function Sysmon() {
   this._state = {
     running: false,
     stopped: false,
-    interval: undefined,
+    delay: undefined,
     config: Object.assign({}, DEFAULT_CONFIG),
   };
 }
@@ -86,17 +97,59 @@ Sysmon.prototype.start = function(options) {
   }
   _this.stop();
   _this.config(options);
+  var _main = function() {
+    async.series([
+      function(err, callback) {
+        // 1.
+      },
+      function(err, callback) {
+        // 2.
+      },
+    ],
+    function(err, results) {
+      // This will be called after 1&2 are complete or in case of an error.
+    });
+  };
+  var __main = function() {
+    async.series({
+      hostname: os.hostname(),
+      uptime: os.uptime(),
+      cpu: {
+        loadavg: os.loadavg()[0],
+        loadavg5: os.loadavg()[1],
+        loadavg15: os.loadavg()[2],
+      },
+      ram: {
+        total: os.totalmem(),
+        free: os.freemem(),
+        used: os.totalmem() - os.freemem(),
+      },
+      hdd: this.df(),
+      ps: {
+        cpu: this.ps('cpu', 5),
+        ram: this.ps('ram', 5),
+      },
+      network: {
+        interfaces: os.networkInterfaces(),
+        leases: this.leases(),
+      },
+    },
+    function(err, result) {
+      // Resulting object.
+    });
+  };
+
   var main = function() {
     var data = {
       loadavg: os.loadavg(),
       uptime: os.uptime(),
-      freemem: os.freemem(),
-      totalmem: os.totalmem(),
+      freeram: os.freemem(),
+      totalram: os.totalmem(),
     };
     var config = _this.config();
-    var freemem = (config.threshold.freemem < 1)
-      ? config.threshold.freemem * data.totalmem
-      : config.threshold.freemem;
+    var freeram = (config.threshold.freeram < 1)
+      ? config.threshold.freeram * data.totalram
+      : config.threshold.freeram;
     if (!config.silent) {
       _this.sendEvent('event', Object.assign({
         type: 'regular',
@@ -117,9 +170,9 @@ Sysmon.prototype.start = function(options) {
         type: 'threshold-loadavg15',
       }, data));
     }
-    if (data.freemem < freemem) {
-      _this.sendEvent('threshold-freemem', Object.assign({
-        type: 'threshold-freemem',
+    if (data.freeram < freeram) {
+      _this.sendEvent('threshold-freeram', Object.assign({
+        type: 'threshold-freeram',
       }, data));
     }
     if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
@@ -239,6 +292,46 @@ Sysmon.prototype.isNumeric = function(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 };
 
+/**
+ * Unix 'df' utility helper method. Gathers disk usage information.
+ * This function uses experimantal ES6 block-scoped declarations.
+ *
+ * @returns {Object}
+ */
+Sysmon.prototype.df = function(callback) {
+  var _this = this;
+  var disks = {};
+  var command = 'df';
+  // On a Mac 'df' shoud be executed with a slightly different synthax.
+  if (os.platform().toLowerCase() === 'darwin') {
+    command = 'df -k';
+  }
+  var main = exec(command, function(err, stdout, stderr) {
+    if (err) {
+      throw new Error(err);
+    }
+    var data = stdout.split('\n');
+    data.splice(0, 1);
+    data.splice(-1, 1);
+    var regexp = /^(\/\S+)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/gi;
+    data.forEach(string => {
+      if (string.charAt(0) !== '/') {
+        return;
+      }
+      var matches = regexp.exec(string);
+      disks[matches[1]] = {};
+      /* jslint -W069 */
+      disks[matches[1]]['used'] = matches[2];
+      disks[matches[1]]['free'] = matches[3];
+      disks[matches[1]]['percent'] = matches[4];
+      /* jslint +W069 */
+      callback(null, disks);
+    });
+  });
+};
+
+module.exports.df = df;
+
 Sysmon.prototype._sanitizeConfig = function(options, callback) {
   if (options.constructor !== Object) {
     callback('Configuration object is of wrong type.');
@@ -255,10 +348,10 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   if ('threshold' in options && (options.threshold.constructor !== Object)) {
     callback('Option \'threshold\' should be an object.');
   }
-  if ('threshold' in options && 'freemem' in options.threshold) {
-    var freemem = options.threshold.freemem;
-    if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
-      callback('Option \'freemem\' should be a Number.');
+  if ('threshold' in options && 'freeram' in options.threshold) {
+    var freeram = options.threshold.freeram;
+    if (/(^\d+$|^0\.\d+$)/.test(freeram) === false) {
+      callback('Option \'freeram\' should be a Number.');
     }
   }
   if ('threshold' in options && 'uptime' in options.threshold) {
@@ -304,3 +397,63 @@ Sysmon.prototype.days = function(n) {
 
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;
+
+// Below this line are unstable functions that are under heavy development.
+
+/**
+ * Wrapper for Unix 'ps' command.
+ *
+ * @async
+ * @example
+ *   {
+ *     pid: 1337,
+ *     name: 'chrome',
+ *     cpu: 0.3,
+ *     mem: {
+ *       private: 23054560,
+ *       virtual: 78923608,
+ *       usage: 0.02
+ *     }
+ *   }
+ */
+Sysmon.prototype.ps = function(options, callback) {
+  let sort = options && 'sort' in options ? options.sort : 'cpu';
+  let limit = options && 'limit' in options ? options.limit : 0;
+
+  if (!['cpu', 'mem', 'pid', 'name'].includes(sort)) {
+    throw new Error('Sort parameter is incorrect.');
+  }
+  if (!this.isNumeric(limit)) {
+    throw new Error('Limit parameter should be a number');
+  }
+  // FIXME: data.sort is currently not working.
+  ps.get(function(err, data) {
+    if (typeof sort === 'string' || sort instanceof String) {
+      data.sort(function(a, b) {
+        return (a[sort] > b[sort]) - (a[sort] < b[sort]);
+      });
+    } else {
+      data.sort(function(a, b) {
+        return parseFloat(a[sort].usage) - parseFloat(b[sort].usage);
+      });
+    }
+    limit = data.length <= limit ? data.length : 0;
+    data = limit > 0 ? data.slice(0, limit) : data;
+
+    callback(null, data);
+  });
+};
+
+/**
+ * Extending Array prototype with 'contains' method that checks whether an
+ * object exists in a given array.
+ */
+Array.prototype.includes = function(obj) {
+  var i = this.length;
+  while (i--) {
+    if (this[i] === obj) {
+      return true;
+    }
+  }
+  return false;
+};
