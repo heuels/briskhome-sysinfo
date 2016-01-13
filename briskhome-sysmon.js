@@ -6,7 +6,7 @@
  * (https://github.com/lfortin/node-os-monitor)
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 'use strict';
@@ -14,6 +14,7 @@
 const events = require('events');
 const exec = require('child_process').exec;
 const util = require('util');
+const fs = require('fs');
 const os = require('os');
 
 const async = require('async');
@@ -436,7 +437,7 @@ Sysmon.prototype.df = function(options, callback) {
   let command = (os.platform().toLowerCase() === 'darwin')
     ? 'df -k'
     : 'df';
-  const df = exec(command, (err, stdout, stderr) => {
+  exec(command, (err, stdout, stderr) => {
     if (err) {
       callback(err.message);
     }
@@ -449,13 +450,41 @@ Sysmon.prototype.df = function(options, callback) {
         return;
       }
       let matches = regexp.exec(string);
-      let results = {};
-      results[matches[1]] = {};
-      results[matches[1]]['used'] = matches[2];
-      results[matches[1]]['free'] = matches[3];
-      results[matches[1]]['percent'] = matches[4];
-      callback(null, results);
+      let result = {};
+      result[matches[1]] = {};
+      result[matches[1]]['used'] = matches[2];
+      result[matches[1]]['free'] = matches[3];
+      result[matches[1]]['percent'] = matches[4];
+      callback(null, result);
     });
+  });
+};
+
+/**
+ * Returns dhcp leases.
+ * Uses 'dhcpd-leases' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
+ */
+Sysmon.prototype.dhcp = function(options, callback) {
+  if (!options || !('file' in options) || (typeof options.file !== 'string')) {
+    callback('Path to \'dhcp-leases\' is required as string.');
+  }
+  let file = options.file;
+  let encoding = (options && 'encoding' in options)
+    ? options.encoding
+    : null;
+  fs.readFile(file, 'utf8', (err, data) => {
+    if (err) {
+      callback(err.message);
+    }
+    let result = leases(data);
+    callback(null, result);
   });
 };
 
