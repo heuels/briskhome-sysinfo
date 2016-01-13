@@ -11,17 +11,17 @@
 
 'use strict';
 
-var events = require('events');
-var exec = require('child_process').exec;
-var util = require('util');
-var os = require('os');
+const events = require('events');
+const exec = require('child_process').exec;
+const util = require('util');
+const os = require('os');
 
-var async = require('async');
-var df = require('node-diskfree');
-var ps = require('current-processes');
-var leases = require('dhcpd-leases');
+const async = require('async');
+const df = require('node-diskfree');
+const ps = require('current-processes');
+const leases = require('dhcpd-leases');
 
-var DEFAULT_CONFIG = {
+const DEFAULT_CONFIG = {
   loop: false,
   delay: 5000,
   silent: false,
@@ -292,44 +292,6 @@ Sysmon.prototype.isNumeric = function(n) {
   return !isNaN(parseFloat(n)) && isFinite(n);
 };
 
-/**
- * Unix 'df' utility helper method. Gathers disk usage information.
- * This function uses experimantal ES6 block-scoped declarations.
- *
- * @returns {Object}
- */
-Sysmon.prototype.df = function(callback) {
-  var _this = this;
-  var disks = {};
-  var command = 'df';
-  // On a Mac 'df' shoud be executed with a slightly different synthax.
-  if (os.platform().toLowerCase() === 'darwin') {
-    command = 'df -k';
-  }
-  var main = exec(command, function(err, stdout, stderr) {
-    if (err) {
-      throw new Error(err);
-    }
-    var data = stdout.split('\n');
-    data.splice(0, 1);
-    data.splice(-1, 1);
-    var regexp = /^(\/\S+)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/gi;
-    data.forEach(string => {
-      if (string.charAt(0) !== '/') {
-        return;
-      }
-      var matches = regexp.exec(string);
-      disks[matches[1]] = {};
-      /* jslint -W069 */
-      disks[matches[1]]['used'] = matches[2];
-      disks[matches[1]]['free'] = matches[3];
-      disks[matches[1]]['percent'] = matches[4];
-      /* jslint +W069 */
-      callback(null, disks);
-    });
-  });
-};
-
 module.exports.df = df;
 
 Sysmon.prototype._sanitizeConfig = function(options, callback) {
@@ -398,35 +360,43 @@ Sysmon.prototype.days = function(n) {
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;
 
-// Below this line are unstable functions that are under heavy development.
+/* Below this line are WIP functions. */
 
 /**
- * Wrapper for Unix 'ps' command.
+ * Wrapper for 'ps' Unix program. Displays the currently-running processes.
+ * Uses 'current-processes' module.
  *
- * @async
- * @example
- *   {
- *     pid: 1337,
- *     name: 'chrome',
- *     cpu: 0.3,
- *     mem: {
- *       private: 23054560,
- *       virtual: 78923608,
- *       usage: 0.02
- *     }
- *   }
+ * @param {Object} options.
+ * @param {Fucntion} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
  */
 Sysmon.prototype.ps = function(options, callback) {
-  let sort = options && 'sort' in options ? options.sort : 'cpu';
-  let limit = options && 'limit' in options ? options.limit : 0;
+  callback = (typeof callback === 'function')
+    ? callback
+    : function() {};
+  let sort = options && 'sort' in options
+    ? options.sort
+    : 'cpu';
+  let limit = options && 'limit' in options
+    ? options.limit
+    : 0;
+  let reverse = options && 'reverse' in options
+    ? options.reverse
+    : false;
 
   if (!['cpu', 'mem', 'pid', 'name'].includes(sort)) {
-    throw new Error('Sort parameter is incorrect.');
+    callback('Sort parameter ' + sort + ' is incorrect.');
   }
   if (!this.isNumeric(limit)) {
-    throw new Error('Limit parameter should be a number');
+    callback('Limit parameter should be a number.');
   }
-  // FIXME: data.sort is currently not working.
+  if (typeof reverse !== 'boolean') {
+    callback('Reverse parameter should be a boolean.');
+  }
+
   ps.get(function(err, data) {
     if (typeof sort === 'string' || sort instanceof String) {
       data.sort(function(a, b) {
@@ -438,18 +408,66 @@ Sysmon.prototype.ps = function(options, callback) {
       });
     }
     limit = data.length <= limit ? data.length : 0;
-    data = limit > 0 ? data.slice(0, limit) : data;
-
+    data = limit > 0
+      ? data.slice(0, limit)
+      : data;
+    data = reverse
+      ? data.reverse()
+      : data;
     callback(null, data);
   });
 };
 
 /**
- * Extending Array prototype with 'contains' method that checks whether an
- * object exists in a given array.
+ * Wrapper for 'df' Unix program. Displays disk usage information.
+ * Uses 'child_process' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
+ */
+Sysmon.prototype.df = function(options, callback) {
+  options = (typeof options === 'string' || options instanceof String)
+    ? options
+    : null;
+  let command = (os.platform().toLowerCase() === 'darwin')
+    ? 'df -k'
+    : 'df';
+  const df = exec(command, (err, stdout, stderr) => {
+    if (err) {
+      callback(err.message);
+    }
+    const regexp = /^(\/\S+)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/gi;
+    let data = stdout.split('\n');
+    data.splice(0, 1);
+    data.splice(-1, 1);
+    data.forEach(string => {
+      if (string.charAt(0) !== '/') {
+        return;
+      }
+      let matches = regexp.exec(string);
+      let results = {};
+      results[matches[1]] = {};
+      results[matches[1]]['used'] = matches[2];
+      results[matches[1]]['free'] = matches[3];
+      results[matches[1]]['percent'] = matches[4];
+      callback(null, results);
+    });
+  });
+};
+
+/**
+ * Extends Array class with 'includes' method that checks
+ * whether a given object exists in array.
+ *
+ * @extends Array
+ * @param {Object} obj.
  */
 Array.prototype.includes = function(obj) {
-  var i = this.length;
+  let i = this.length;
   while (i--) {
     if (this[i] === obj) {
       return true;

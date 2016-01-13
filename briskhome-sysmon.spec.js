@@ -306,3 +306,13 @@ describe('Sysmon.config() ', () => {
     });
   });
 });
+
+describe('Sysmon.ps()', () => {
+  describe('options', () => {
+    it('should not accept random sort parameters', function() {
+      assert.throws(function() {
+        sysmon.ps({sort: 'test'});
+      });
+    });
+  });
+});
