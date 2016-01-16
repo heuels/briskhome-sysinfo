@@ -28,40 +28,40 @@ describe('Sysmon.start()', () => {
 });
 
 describe('Sysmon.config() ', () => {
-  describe('- delay', () => {
+  describe('- interval', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ delay: false, });
+        sysmon.start({ interval: false, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ delay: new Date(), });
+        sysmon.start({ interval: new Date(), });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ delay: ['test', 'test'], });
+        sysmon.start({ interval: ['test', 'test'], });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ delay: {test: 'test'}, });
+        sysmon.start({ interval: {test: 'test'}, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ delay: 'test', });
+        sysmon.start({ interval: 'test', });
       });
     });
     it('should accept a number', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ delay: 123, });
+        sysmon.start({ interval: 123, });
       });
     });
     it('should accept a number as a string', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ delay: '123', });
+        sysmon.start({ interval: '123', });
       });
     });
   });

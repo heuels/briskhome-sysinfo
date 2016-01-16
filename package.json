@@ -4,7 +4,8 @@
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
-    "test": "mocha briskhome-sysmon.spec.js"
+    "test": "mocha briskhome-sysmon.spec.js",
+    "coverage": "./node_modules/.bin/istanbul cover _mocha briskhome-sysmon.spec.js"
   },
   "author": "Egor Zaitsev <ezaitsev@briskhome.com>",
   "license": "ISC",
@@ -14,7 +15,7 @@
   "private": true,
   "devDependencies": {
     "chai": "^3.4.1",
-    "mock-os": "0.0.1"
+    "istanbul": "^0.4.2"
   },
   "dependencies": {
     "async": "^1.5.2",
