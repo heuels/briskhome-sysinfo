@@ -21,6 +21,8 @@ const processes = require('current-processes');
 const leases = require('dhcpd-leases');
 const async = require('async');
 
+const is = require('@briskhome/helper');
+
 // Loads configuration from a unified storage. Planned feature.
 // const default = require('@briskhome/config');
 
@@ -31,7 +33,7 @@ const DEFAULT_CONFIG = {
   threshold: {
     loadavg: os.cpus().length,
     freehdd: 0.5,
-    freeram: 50,
+    freemem: 50,
     uptime: 50,
   },
 };
@@ -87,6 +89,8 @@ Sysmon.prototype.sendEvent = function(event, obj) {
  * Parameters, including critical values, are loaded from configuration object
  * if present or from a default configuration object.
  *
+ * @todo Validate this function with 'let' instead of 'var' with JSHint.
+ *
  * @param {Array} options A set of options passed from the declaration.
  * @returns {Sysmon}
  */
@@ -99,23 +103,24 @@ Sysmon.prototype._start = function(options) {
   /**
    * @function main()
    * Asynchronously collects server information and creates a valid JSON object
-   * which it in turn passes for checking against critical values.
+   * which is in turn passed for checking against critical values.
    */
-  let main = function collect() {
+  var main = function collect() {
     async.parallel({
       disks: (callback) => {
         this.df(null, callback);
       },
-
       processes: (callback) => {
         // TODO: Remove limit, leave just sort by reversed 'cpu'.
         // TODO: Test values should be added from environment config.
         this.ps({ sort: 'cpu', limit: '5', reverse: true }, callback);
       },
-
       leases: (callback) => {
         // TODO: Test values should be added from environment config.
         this.dhcp({ file: './dhcpd.leases' }, callback);
+      },
+      services: (callback) => {
+        this.services(null, callback);
       },
     },
     function(err, data) {
@@ -143,7 +148,7 @@ Sysmon.prototype._start = function(options) {
             data.processes,
           ],
           services: [
-
+            data.services,
           ],
         },
         network: {
@@ -160,10 +165,36 @@ Sysmon.prototype._start = function(options) {
    * Sends server information in JSON as 'monitor' event. Compares server
    * information against preset critical values.
    */
-  function review(data) {
+  var review = function review(data) {
     // Critical values by default are supplied for the following:
     console.log(data);
-  }
+    // let critical = [];
+    // let config = this.config();
+    // let freemem = (config.threshold.freemem < 1)
+    //   ? config.threshold.freemem * data.totalram
+    //   : config.threshold.freemem;
+    // if (data.system.cpu.loadavg > config.loadavg[0]) {
+    //   critical.push('loadavg');
+    // }
+    // if (data.system.cpu.loadavg5 > config.loadavg[1]) {
+    //   critical.push('loadavg5');
+    // }
+    // if (data.system.cpu.loadavg15 > config.loadavg[2]) {
+    //   critical.push('loadavg15');
+    // }
+    // if (data.system.memory.free > freemem) {
+    //   critical.push('freemem');
+    // }
+    // if (data.system.uptime > config.uptime) {
+    //   critical.push('uptime');
+    // }
+    // // TODO: Default all hard disk critical value.
+    // data.critical = critical || [];
+    // this.sendEvent('state', Object.assign({
+    //   type: 'state',
+    // }, data));
+
+  }.bind(this);
 
   if (!this.config().interval) {
     process.nextTick(main);
@@ -177,7 +208,6 @@ Sysmon.prototype._start = function(options) {
       type: 'start',
     });
   }
-
 };
 
 Sysmon.prototype.start = function(options) {
@@ -194,13 +224,13 @@ Sysmon.prototype.start = function(options) {
     var data = {
       loadavg: os.loadavg(),
       uptime: os.uptime(),
-      freeram: os.freemem(),
+      freemem: os.freemem(),
       totalram: os.totalmem(),
     };
     var config = _this.config();
-    var freeram = (config.threshold.freeram < 1)
-      ? config.threshold.freeram * data.totalram
-      : config.threshold.freeram;
+    var freemem = (config.threshold.freemem < 1)
+      ? config.threshold.freemem * data.totalram
+      : config.threshold.freemem;
     if (!config.silent) {
       _this.sendEvent('event', Object.assign({
         type: 'regular',
@@ -221,9 +251,9 @@ Sysmon.prototype.start = function(options) {
         type: 'threshold-loadavg15',
       }, data));
     }
-    if (data.freeram < freeram) {
-      _this.sendEvent('threshold-freeram', Object.assign({
-        type: 'threshold-freeram',
+    if (data.freemem < freemem) {
+      _this.sendEvent('threshold-freemem', Object.assign({
+        type: 'threshold-freemem',
       }, data));
     }
     if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
@@ -253,7 +283,7 @@ Sysmon.prototype.start = function(options) {
  */
 Sysmon.prototype.stop = function() {
   clearInterval(this._state.interval);
-  if (this.isRunning()) {
+  if (this._state.running) {
     this._state.running = false;
     this.sendEvent('stop', {
       type: 'stop',
@@ -269,22 +299,8 @@ Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {
     type: 'reset',
   });
-  this[this.isRunning() ? 'start' : 'config']
+  this[this._state.running ? 'start' : 'config']
     (Object.assign({}, DEFAULT_CONFIG));
-  return this;
-};
-
-/**
- * Destroys Sysmon instance and emits a 'destroy' event.
- */
-Sysmon.prototype.destroy = function() {
-  if (!this._isStopped()) {
-    this.sendEvent('destroy', {
-      type: 'destroy',
-    });
-    this.stop();
-    this._state.stopped = true;
-  }
   return this;
 };
 
@@ -314,42 +330,11 @@ Sysmon.prototype.config = function(options) {
   return _this._state.config;
 };
 
-/**
- * Checks whether Sysmon is active and running.
- *
- * @returns {Boolean} status True = running, false = stopped.
- * @private
- */
-Sysmon.prototype.isRunning = function() {
-  return !!this._state.running;
-};
-
-/**
- * Checks whether Sysmon is destroyed.
- *
- * @returns {Boolean} status True = destroyed, false = active.
- * @private
- */
-Sysmon.prototype._isStopped = function() {
-  return !!this._state.stopped;
-};
-
-/**
- * Various helper methods.
- * The main function checks whether an argument is an acceptable number.
- * Additional functions help quickly convert timestamps to any measure possible.
- *
- * @param {Number} n A number that should be sanitized or converted.
- */
-Sysmon.prototype.isNumeric = function(n) {
-  return !isNaN(parseFloat(n)) && isFinite(n);
-};
-
 Sysmon.prototype._sanitizeConfig = function(options, callback) {
   if (options.constructor !== Object) {
     callback('Configuration object is of wrong type.');
   }
-  if ('interval' in options && !this.isNumeric(options.interval)) {
+  if ('interval' in options && !is.number(options.interval)) {
     callback('Option \'interval\' should be a number.');
   }
   if ('silent' in options && typeof options.silent !== 'boolean') {
@@ -361,25 +346,25 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   if ('threshold' in options && (options.threshold.constructor !== Object)) {
     callback('Option \'threshold\' should be an object.');
   }
-  if ('threshold' in options && 'freeram' in options.threshold) {
-    var freeram = options.threshold.freeram;
-    if (/(^\d+$|^0\.\d+$)/.test(freeram) === false) {
-      callback('Option \'freeram\' should be a Number.');
+  if ('threshold' in options && 'freemem' in options.threshold) {
+    var freemem = options.threshold.freemem;
+    if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
+      callback('Option \'freemem\' should be a Number.');
     }
   }
   if ('threshold' in options && 'uptime' in options.threshold) {
     var uptime = options.threshold.uptime;
-    if (!this.isNumeric(uptime)) {
+    if (!is.number(uptime)) {
       callback('Option \'uptime\' should be a Number.');
     }
   }
   if ('threshold' in options && 'loadavg' in options.threshold) {
     var loadavg = options.threshold.loadavg;
-    if (this.isNumeric(loadavg)) {
+    if (is.number(loadavg)) {
       options.threshold.loadavg = [loadavg, loadavg, loadavg];
     } else if (loadavg.constructor === Array) {
       if (loadavg.length !== 3 || loadavg.every(function(item) {
-        if (!this.isNumeric(item)) {
+        if (!is.number(item)) {
           callback('Option \'loadavg\' should be a Number or an Array.');
         }
       }, this)) {
@@ -392,26 +377,11 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   callback(null, options);
 };
 
-Sysmon.prototype.seconds = function(n) {
-  return this._sanitizeNumber(n * 1000);
-};
-
-Sysmon.prototype.minutes = function(n) {
-  return this._sanitizeNumber(n * this.seconds(60));
-};
-
-Sysmon.prototype.hours = function(n) {
-  return this._sanitizeNumber(n * this.minutes(60));
-};
-
-Sysmon.prototype.days = function(n) {
-  return this._sanitizeNumber(n * this.hours(24));
-};
-
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;
 
 /* Below this line are WIP functions. */
+// TODO: Move these functions to the top.
 
 /**
  * Wrapper for 'ps' Unix program. Displays the currently-running processes.
@@ -424,14 +394,14 @@ module.exports.Sysmon = Sysmon;
  * @param {Error} err.
  * @param {Array} data.
  */
-Sysmon.prototype.ps = (options, callback) => {
-  let sort = options && 'sort' in options
+Sysmon.prototype.ps = function(options, callback) {
+  let sort = (options && 'sort' in options)
     ? options.sort
     : 'cpu';
-  let limit = options && 'limit' in options
+  let limit = (options && 'limit' in options)
     ? options.limit
     : 0;
-  let reverse = options && 'reverse' in options
+  let reverse = (options && 'reverse' in options)
     ? options.reverse
     : false;
 
@@ -485,7 +455,8 @@ Sysmon.prototype.ps = (options, callback) => {
  * @param {Error} err.
  * @param {Array} data.
  */
-Sysmon.prototype.df = (options, callback) => {
+Sysmon.prototype.df = function(options, callback) {
+  // 'options' should not be used?
   options = (typeof options === 'string' || options instanceof String)
     ? options
     : null;
@@ -498,6 +469,7 @@ Sysmon.prototype.df = (options, callback) => {
     }
 
     const regexp = /^(\/\S+)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/gi;
+    let result = {};
     let data = stdout.split('\n');
     data.splice(0, 1);
     data.splice(-1, 1);
@@ -507,13 +479,13 @@ Sysmon.prototype.df = (options, callback) => {
       }
 
       let matches = regexp.exec(string);
-      let result = {};
       result[matches[1]] = {};
       result[matches[1]].used = matches[2];
       result[matches[1]].free = matches[3];
       result[matches[1]].percent = matches[4];
-      return callback(null, result);
     });
+
+    return callback(null, result);
   });
 };
 
@@ -528,8 +500,8 @@ Sysmon.prototype.df = (options, callback) => {
  * @param {Error} err.
  * @param {Array} data.
  */
-Sysmon.prototype.dhcp = (options, callback) => {
-  let file = options && 'file' in options // && file !== ''  // TODO: cb(err).
+Sysmon.prototype.dhcp = function(options, callback) {
+  let file = (options && 'file' in options) // && file !== ''  // TODO: cb(err).
     ? options.file
     : '/var/lib/dhcp/dhcpd.leases';
   let encoding = (options && 'encoding' in options) // FIXME: use encoding.
@@ -542,6 +514,55 @@ Sysmon.prototype.dhcp = (options, callback) => {
 
     let result = leases(data);
     return callback(null, result);
+  });
+};
+
+/**
+ * Returns list of services and their status.
+ * Uses 'child_process' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Object} data.
+ */
+
+Sysmon.prototype.services = function (options, callback) {
+  options = (typeof options === 'string' || options instanceof String)
+    ? options
+    : null;
+  let command = (os.platform().toLowerCase() === 'darwin')
+    ? 'cat ./services'
+    : 'sudo services --status-all';
+  exec(command, (err, stdout, stderr) => {
+    if (err) {
+      return callback(err);
+    }
+
+    console.log('stdout: ' + stdout);
+    console.log('stderr: ' + stderr);
+    const regexp = /\s\[\s([\+\-\?])\s\]\s+([a-z0-9\+\-]+)/gim;
+    let result = {};
+    let data = stdout.split('\n');
+    data.forEach(string => {
+      let matches = regexp.exec(string);
+      console.log('matches: ' + matches);
+      if (!matches) {
+        return;
+      }
+
+      if (matches && matches[1] === '+') {
+        result[matches[2]] = true;
+      } else if (matches && matches[1] === '-') {
+        result[matches[2]] = false;
+      } else {
+        result[matches[2]] = null;
+      }
+    });
+
+    callback(null, result);
   });
 };
 

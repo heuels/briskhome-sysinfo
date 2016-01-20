@@ -1,6 +1,6 @@
 {
   "name": "@briskhome/sysmon",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
@@ -18,6 +18,7 @@
     "istanbul": "^0.4.2"
   },
   "dependencies": {
+    "@briskhome/helper": "git+https://ezaitsev@bitbucket.org/heuels/briskhome-helper.git",
     "async": "^1.5.2",
     "current-processes": "^0.2.1",
     "dhcpd-leases": "0.0.1"

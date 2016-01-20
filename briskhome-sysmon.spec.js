@@ -10,13 +10,10 @@
 
 /* globals it: false */
 /* globals describe: false */
-/* globals done: false */
-/* globals afterEach: false*/
 
 var assert = require('chai').assert;
 
 var sysmon = require('./briskhome-sysmon');
-var os = require('os');
 
 process.stdout.write(Date());
 describe('Sysmon.start()', () => {

@@ -11,21 +11,22 @@ Prior to v0.2.0 the idea was to have a self-contained module without any externa
   * [x] Fix issue #1
 
 ### v0.3.x
-  * [ ] Send a valid JSON object with every event.
-  * [ ] Instead of sending 'critical' events, add a 'critical' section to event.
-  * [ ] Add free/total disk space to results.
+  * [x] Send a valid JSON object with every event.
+  * [x] Instead of sending 'critical' events, add a 'critical' section to event.
+  * [x] Add free/total disk space to results.
   * [ ] Add low disk space event.
   * [ ] Add low disk space configuration option.
-  * [ ] Add network stats support.
+  * [x] Add network stats support.
   * [ ] Add unit tests.
+  * [ ] Begin using @briskhome/helper library for type checking.
 
 ### v1.x.x
   * [ ] Add comments to every function.
   * [ ] Refactor all functions.
     * [ ] Refactor Sysmon.prototype.config.
-    * [ ] Refactor Sysmon.prototype.start.
+    * [x] Refactor Sysmon.prototype.start.
     * [ ] Refactor Sysmon.prototype.reset.
     * [ ] Refactor Sysmon.prototype.stop.
-    * [ ] Refactor Sysmon.prototype.destroy.
-    * [ ] Refactor Sysmon.prototype._isRunning.
-    * [ ] Refactor Sysmon.prototype._isStopped.
+    * [x] Refactor Sysmon.prototype.destroy.
+    * [x] Refactor Sysmon.prototype._isRunning.
+    * [x] Refactor Sysmon.prototype._isStopped.
