@@ -1,10 +1,11 @@
 {
-  "name": "briskhome-sysmon",
-  "version": "0.2.0",
+  "name": "@briskhome/sysmon",
+  "version": "0.3.0",
   "description": "Briskhome system monitor module.",
   "main": "briskhome-sysmon.js",
   "scripts": {
-    "test": "mocha briskhome-sysmon.spec.js"
+    "test": "mocha briskhome-sysmon.spec.js",
+    "coverage": "./node_modules/.bin/istanbul cover _mocha briskhome-sysmon.spec.js"
   },
   "author": "Egor Zaitsev <ezaitsev@briskhome.com>",
   "license": "ISC",
@@ -14,6 +15,12 @@
   "private": true,
   "devDependencies": {
     "chai": "^3.4.1",
-    "mock-os": "0.0.1"
+    "istanbul": "^0.4.2"
+  },
+  "dependencies": {
+    "@briskhome/helper": "git+https://ezaitsev@bitbucket.org/heuels/briskhome-helper.git",
+    "async": "^1.5.2",
+    "current-processes": "^0.2.1",
+    "dhcpd-leases": "0.0.1"
   }
 }

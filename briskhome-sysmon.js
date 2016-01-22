@@ -2,22 +2,37 @@
  * Briskhome system monitor <briskhome-sysmon.js>
  * Part of Briskhome house monitoring service.
  *
+ * Based on 'os-monitor' package by lfortin
+ * (https://github.com/lfortin/node-os-monitor)
+ *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 'use strict';
 
-var events   = require('events');
-var util     = require('util');
-var os       = require('os');
+const events = require('events');
+const exec = require('child_process').exec;
+const util = require('util');
+const fs = require('fs');
+const os = require('os');
 
-var DEFAULT_CONFIG = {
-  loop: false,
-  delay: 5000,
+const processes = require('current-processes');
+const leases = require('dhcpd-leases');
+const async = require('async');
+
+const is = require('@briskhome/helper');
+
+// Loads configuration from a unified storage. Planned feature.
+// const default = require('@briskhome/config');
+
+const DEFAULT_CONFIG = {
+  interval: 5000,
   silent: false,
+  verbose: true,
   threshold: {
     loadavg: os.cpus().length,
+    freehdd: 0.5,
     freemem: 50,
     uptime: 50,
   },
@@ -47,15 +62,14 @@ function Sysmon() {
 util.inherits(Sysmon, events.EventEmitter);
 
 /**
- * Emits an event when something happens.
+ * Emits events.
  *
  * Note the code below that adds timestamp to the event object. Javascript
  * uses the number of milliseconds since epoch, Unix timestamp, on the other
  * hand, uses seconds since epoch.
  *
- * @param {string} event Name of the event that occured during the execution of
- *        the library.
- * @param {object} obj Current set of captured stats.
+ * @param {string} event  Name of the event.
+ * @param {object} obj    Object containing server information.
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
   var curtime = Math.floor(+Date.now() / 1000);
@@ -66,79 +80,138 @@ Sysmon.prototype.sendEvent = function(event, obj) {
 };
 
 /**
- * Starts Sysmon instance.
- * Checks the server stats and emits events when necessary.
+ * Starts system state monitor.
  *
  * Amount of output can be tuned by setting the 'silent' option of the
- * configuration to 'true'. If options array is present, then configuration is
- * loaded from it. If no argument is passed then default configuration loaded.
+ * configuration to 'true'. This makes it so that 'status' events are fired
+ * only if a threshold is broken.
+ *
+ * Parameters, including critical values, are loaded from configuration object
+ * if present or from a default configuration object.
  *
  * @param {Array} options A set of options passed from the declaration.
- * @returns {Sysmon}
  */
 Sysmon.prototype.start = function(options) {
-  var _this = this;
-  if (_this._isStopped()) {
-    throw new Error('briskhome-sysmon has been destroyed by .destroy() method');
-  }
-  if (options) {
-    //
-  }
-  _this.stop();
-  _this.config(options);
-  var main = function() {
-    var data = {
-      loadavg: os.loadavg(),
-      uptime: os.uptime(),
-      freemem: os.freemem(),
-      totalmem: os.totalmem(),
-    };
-    var config = _this.config();
-    var freemem = (config.threshold.freemem < 1)
-      ? config.threshold.freemem * data.totalmem
+  // Calling stop() here clears the old interval.
+  // Configuration happens once only right after the creation of instance.
+  this.stop();
+  this.config(options);
+
+  /**
+   * @function main()
+   * Asynchronously collects server information and creates a valid JSON object
+   * which is in turn passed for checking against critical values.
+   */
+  var main = function collect() {
+    async.parallel({
+      disks: (callback) => {
+        this.df(null, callback);
+      },
+      processes: (callback) => {
+        // TODO: Remove limit, leave just sort by reversed 'cpu'.
+        // TODO: Test values should be added from environment config.
+        this.ps({ sort: 'cpu', limit: '5', reverse: true }, callback);
+      },
+      leases: (callback) => {
+        // TODO: Test values should be added from environment config.
+        this.dhcp({ file: './dhcpd.leases' }, callback);
+      },
+      services: (callback) => {
+        this.services(null, callback);
+      },
+    },
+    function(err, data) {
+      if (err) {
+        throw err;
+      }
+      let result = {
+        hostname: os.hostname(),
+        system: {
+          uptime: os.uptime(),
+          cpu: {
+            loadavg: os.loadavg()[0],
+            loadavg5: os.loadavg()[1],
+            loadavg15: os.loadavg()[2],
+          },
+          memory: {
+            free: os.freemem(),
+            used: os.totalmem() - os.freemem(),
+            total: os.totalmem(),
+          },
+          disks: [
+            data.disks,
+          ],
+          processes: [
+            data.processes,
+          ],
+          services: [
+            data.services,
+          ],
+        },
+        network: {
+          interfaces: os.networkInterfaces(),
+          leases: data.leases,
+        },
+      };
+      review(result);
+    });
+  }.bind(this);
+
+  /**
+   * @function review()
+   * Sends server information in JSON as 'monitor' event. Compares server
+   * information against preset critical values.
+   */
+  var review = function review(data) {
+    let critical = [];
+    let config = this.config();
+    let freemem = (config.threshold.freemem < 1)
+      ? config.threshold.freemem * data.totalram
       : config.threshold.freemem;
-    if (!config.silent) {
-      _this.sendEvent('event', Object.assign({
-        type: 'regular',
-      }, data));
+    if (data.system.cpu.loadavg > config.threshold.loadavg[0]) {
+      critical.push('system.cpu.loadavg');
     }
-    if (data.loadavg[0] > config.threshold.loadavg[0]) {
-      _this.sendEvent('threshold-loadavg1', Object.assign({
-        type: 'threshold-loadavg1',
-      }, data));
+    if (data.system.cpu.loadavg5 > config.threshold.loadavg[1]) {
+      critical.push('system.cpu.loadavg5');
     }
-    if (data.loadavg[1] > config.threshold.loadavg[1]) {
-      _this.sendEvent('threshold-loadavg5', Object.assign({
-        type: 'threshold-loadavg5',
-      }, data));
+    if (data.system.cpu.loadavg15 > config.threshold.loadavg[2]) {
+      critical.push('system.cpu.loadavg15');
     }
-    if (data.loadavg[2] > config.threshold.loadavg[2]) {
-      _this.sendEvent('threshold-loadavg15', Object.assign({
-        type: 'threshold-loadavg15',
-      }, data));
+    if (data.system.memory.free < freemem) {
+      critical.push('system.memory.freemem');
     }
-    if (data.freemem < freemem) {
-      _this.sendEvent('threshold-freemem', Object.assign({
-        type: 'threshold-freemem',
-      }, data));
+    if (data.system.uptime > config.threshold.uptime) {
+      critical.push('system.uptime');
     }
-    if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
-      _this.sendEvent('threshold-uptime', Object.assign({
-        type: 'threshold-uptime',
-      }, data));
-    }
-  };
-  if (_this.config().loop) {
+    // for (let disk in data.system.disks) {
+    //   if (data.system.disks.hasOwnProperty(disk)) {
+    //     if (disk.free < config.threshold.hdd) {
+    //
+    //     }
+    //
+    //
+    //   }
+    // }
+    data.critical = critical || [];
+    console.log(JSON.stringify(data));
+    this.sendEvent('state', Object.assign({
+      type: 'state',
+    }, data));
+
+  }.bind(this);
+
+  if (!this.config().interval) {
     process.nextTick(main);
+  } else {
+    this._state.interval = setInterval(main, this.config().interval);
   }
-  _this._state.interval = setInterval(main, _this.config().delay);
-  if (!_this.isRunning()) {
-    _this._state.running = true;
-    _this.sendEvent('start', {
+
+  if (!this._state.running) {
+    this._state.running = true;
+    this.sendEvent('start', {
       type: 'start',
     });
   }
-  return _this;
 };
 
 /**
@@ -147,7 +220,7 @@ Sysmon.prototype.start = function(options) {
  */
 Sysmon.prototype.stop = function() {
   clearInterval(this._state.interval);
-  if (this.isRunning()) {
+  if (this._state.running) {
     this._state.running = false;
     this.sendEvent('stop', {
       type: 'stop',
@@ -163,22 +236,8 @@ Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {
     type: 'reset',
   });
-  this[this.isRunning() ? 'start' : 'config']
+  this[this._state.running ? 'start' : 'config']
     (Object.assign({}, DEFAULT_CONFIG));
-  return this;
-};
-
-/**
- * Destroys Sysmon instance and emits a 'destroy' event.
- */
-Sysmon.prototype.destroy = function() {
-  if (!this._isStopped()) {
-    this.sendEvent('destroy', {
-      type: 'destroy',
-    });
-    this.stop();
-    this._state.stopped = true;
-  }
   return this;
 };
 
@@ -208,51 +267,20 @@ Sysmon.prototype.config = function(options) {
   return _this._state.config;
 };
 
-/**
- * Checks whether Sysmon is active and running.
- *
- * @returns {Boolean} status True = running, false = stopped.
- * @private
- */
-Sysmon.prototype.isRunning = function() {
-  return !!this._state.running;
-};
-
-/**
- * Checks whether Sysmon is destroyed.
- *
- * @returns {Boolean} status True = destroyed, false = active.
- * @private
- */
-Sysmon.prototype._isStopped = function() {
-  return !!this._state.stopped;
-};
-
-/**
- * Various helper methods.
- * The main function checks whether an argument is an acceptable number.
- * Additional functions help quickly convert timestamps to any measure possible.
- *
- * @param {Number} n A number that should be sanitized or converted.
- */
-Sysmon.prototype.isNumeric = function(n) {
-  return !isNaN(parseFloat(n)) && isFinite(n);
-};
-
 Sysmon.prototype._sanitizeConfig = function(options, callback) {
-  if (options.constructor !== Object) {
+  if (!is.object(options)) {
     callback('Configuration object is of wrong type.');
   }
-  if ('delay' in options && !this.isNumeric(options.delay)) {
-    callback('Option \'delay\' should be a number.');
+  if ('interval' in options && !is.number(options.interval)) {
+    callback('Option \'interval\' should be a number.');
   }
-  if ('silent' in options && typeof options.silent !== 'boolean') {
+  if ('silent' in options && !is.boolean(options.silent)) {
     callback('Option \'silent\' should be a boolean.');
   }
-  if ('loop' in options && (typeof options.loop !== 'boolean')) {
+  if ('loop' in options && !is.boolean(options.loop)) {
     callback('Option \'loop\' should be a boolean.');
   }
-  if ('threshold' in options && (options.threshold.constructor !== Object)) {
+  if ('threshold' in options && !is.object(options.threshold)) {
     callback('Option \'threshold\' should be an object.');
   }
   if ('threshold' in options && 'freemem' in options.threshold) {
@@ -263,17 +291,17 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   }
   if ('threshold' in options && 'uptime' in options.threshold) {
     var uptime = options.threshold.uptime;
-    if (!this.isNumeric(uptime)) {
+    if (!is.number(uptime)) {
       callback('Option \'uptime\' should be a Number.');
     }
   }
   if ('threshold' in options && 'loadavg' in options.threshold) {
     var loadavg = options.threshold.loadavg;
-    if (this.isNumeric(loadavg)) {
+    if (is.number(loadavg)) {
       options.threshold.loadavg = [loadavg, loadavg, loadavg];
-    } else if (loadavg.constructor === Array) {
-      if (loadavg.length !== 3 || loadavg.every(function(item, i, arr) {
-        if (!this.isNumeric(item)) {
+    } else if (is.array(loadavg)) {
+      if (loadavg.length !== 3 || loadavg.every(function(item) {
+        if (!is.number(item)) {
           callback('Option \'loadavg\' should be a Number or an Array.');
         }
       }, this)) {
@@ -286,21 +314,205 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   callback(null, options);
 };
 
-Sysmon.prototype.seconds = function(n) {
-  return this._sanitizeNumber(n * 1000);
+/**
+ * Wrapper for 'ps' Unix program. Displays the currently-running processes.
+ * Uses 'current-processes' module.
+ *
+ * @param {Object} options.
+ * @param {Fucntion} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
+ */
+Sysmon.prototype.ps = function(options, callback) {
+  let sort = (options && 'sort' in options)
+    ? options.sort
+    : 'cpu';
+  let limit = (options && 'limit' in options)
+    ? options.limit
+    : 0;
+  let reverse = (options && 'reverse' in options)
+    ? options.reverse
+    : false;
+
+  if (!['cpu', 'mem', 'pid', 'name'].includes(sort)) {
+    let err = new Error('Sort parameter ' + sort + ' is incorrect.');
+    return callback(err);
+  }
+
+  if (!is.number(limit)) {
+    let err = new Error('Limit parameter should be a number.');
+    return callback(err);
+  }
+
+  if (!is.boolean(reverse)) {
+    let err = new Error('Reverse parameter should be a boolean.');
+    return callback(err);
+  }
+
+  processes.get(function(err, data) {
+    if (is.string(sort)) {
+      data.sort(function(a, b) {
+        return (a[sort] > b[sort]) - (a[sort] < b[sort]);
+      });
+    } else {
+      data.sort(function(a, b) {
+        return parseFloat(a[sort].usage) - parseFloat(b[sort].usage);
+      });
+    }
+
+    data = reverse
+      ? data.reverse()
+      : data;
+    limit = data.length >= limit
+      ? limit
+      : 0;
+    data = (limit > 0)
+      ? data.slice(0, limit)
+      : data;
+    return callback(null, data);
+  });
 };
 
-Sysmon.prototype.minutes = function(n) {
-  return this._sanitizeNumber(n * this.seconds(60));
+/**
+ * Wrapper for 'df' Unix program. Displays disk usage information.
+ * Uses 'child_process' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
+ */
+Sysmon.prototype.df = function(options, callback) {
+  // 'options' should not be used?
+  options = (is.string(options))
+    ? options
+    : null;
+  let command = (os.platform().toLowerCase() === 'darwin')
+    ? 'df -k'
+    : 'df';
+  exec(command, (err, stdout) => {
+    if (err) {
+      return callback(err);
+    }
+
+    const regexp = /^(\/\S+)\s+\S+\s+(\d+)\s+(\d+)\s+(\d+)/gi;
+    let result = {};
+    let data = stdout.split('\n');
+    data.splice(0, 1);
+    data.splice(-1, 1);
+    data.forEach(string => {
+      if (string.charAt(0) !== '/') {
+        return;
+      }
+
+      let matches = regexp.exec(string);
+      result[matches[1]] = {};
+      result[matches[1]].used = matches[2];
+      result[matches[1]].free = matches[3];
+      result[matches[1]].percent = matches[4];
+    });
+
+    return callback(null, result);
+  });
 };
 
-Sysmon.prototype.hours = function(n) {
-  return this._sanitizeNumber(n * this.minutes(60));
+/**
+ * Returns dhcp leases.
+ * Uses 'dhcpd-leases' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Array} data.
+ */
+Sysmon.prototype.dhcp = function(options, callback) {
+  // && file !== ''  // TODO: cb(err).
+  let file = (options && 'file' in options)
+    ? options.file
+    : '/var/lib/dhcp/dhcpd.leases';
+  // FIXME: use encoding.
+  // let encoding = (options && 'encoding' in options)
+  //   ? options.encoding
+  //   : null;
+  fs.readFile(file, 'utf8', (err, data) => {
+    if (err) {
+      return callback(err);
+    }
+
+    let result = leases(data);
+    return callback(null, result);
+  });
 };
 
-Sysmon.prototype.days = function(n) {
-  return this._sanitizeNumber(n * this.hours(24));
+/**
+ * Returns list of services and their status.
+ * Uses 'child_process' module.
+ *
+ * @param {String} options.
+ * @param {Function} callback.
+ *
+ * @callback
+ * @param {Error} err.
+ * @param {Object} data.
+ */
+
+Sysmon.prototype.services = function (options, callback) {
+  options = (typeof options === 'string' || options instanceof String)
+    ? options
+    : null;
+  let command = (os.platform().toLowerCase() === 'darwin')
+    ? 'cat ./services'
+    : 'sudo services --status-all';
+  exec(command, (err, stdout) => {
+    if (err) {
+      return callback(err);
+    }
+
+    const regexp = /\s\[\s([\+\-\?])\s\]\s+([a-z0-9\+\-]+)/gim;
+    let result = {};
+    let data = stdout.split('\n');
+    data.forEach(string => {
+      let matches = regexp.exec(string);
+      if (!matches) {
+        return;
+      }
+
+      if (matches && matches[1] === '+') {
+        result[matches[2]] = true;
+      } else if (matches && matches[1] === '-') {
+        result[matches[2]] = false;
+      } else {
+        result[matches[2]] = null;
+      }
+    });
+
+    callback(null, result);
+  });
 };
 
 module.exports = new Sysmon();
 module.exports.Sysmon = Sysmon;
+
+/**
+ * Extends Array class with 'includes' method that checks
+ * whether a given object exists in array.
+ *
+ * @extends Array
+ * @param {Object} obj.
+ */
+Array.prototype.includes = function(obj) {
+  var i = this.length;
+  while (i--) {
+    if (this[i] === obj) {
+      return true;
+    }
+  }
+
+  return false;
+};

@@ -3,296 +3,306 @@
  * Part of Briskhome house monitoring service.
  *
  * @author Egor Zaitsev <ezaitsev@briskhome.com>
- * @version 0.2.0
+ * @version 0.3.0
  */
 
 'use strict';
 
 /* globals it: false */
 /* globals describe: false */
-/* globals done: false */
-/* globals afterEach: false*/
 
 var assert = require('chai').assert;
 
 var sysmon = require('./briskhome-sysmon');
-var os = require('os');
 
 process.stdout.write(Date());
-describe('Sysmon.start()', () => {
-  it('should start an instance', () => {
+
+describe('._start()', () => {
+  it('should _start an instance', () => {
     assert.doesNotThrow(function() {
-      sysmon.start();
+      sysmon._start();
+    });
+  });
+
+
+  describe('main', function() {
+
+  });
+
+  describe('review', function() {
+    it('should throw critical \'freemem\'', function() {
+      sysmon._start();
+
     });
   });
 });
 
-describe('Sysmon.config() ', () => {
-  describe('- delay', () => {
+describe('.config() ', () => {
+  describe('- interval', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ delay: false, });
+        sysmon._start({ interval: false, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ delay: new Date(), });
+        sysmon._start({ interval: new Date(), });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ delay: ['test', 'test'], });
+        sysmon._start({ interval: ['test', 'test'], });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ delay: {test: 'test'}, });
+        sysmon._start({ interval: {test: 'test'}, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ delay: 'test', });
+        sysmon._start({ interval: 'test', });
       });
     });
     it('should accept a number', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ delay: 123, });
+        sysmon._start({ interval: 123, });
       });
     });
     it('should accept a number as a string', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ delay: '123', });
+        sysmon._start({ interval: '123', });
       });
     });
   });
   describe('- loop', () => {
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ loop: new Date(), });
+        sysmon._start({ loop: new Date(), });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ loop: ['test', 'test'], });
+        sysmon._start({ loop: ['test', 'test'], });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ loop: {test: 'test'}, });
+        sysmon._start({ loop: {test: 'test'}, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ loop: 'test', });
+        sysmon._start({ loop: 'test', });
       });
     });
     it('should not accept a number', function() {
       assert.throws(function() {
-        sysmon.start({ loop: 123, });
+        sysmon._start({ loop: 123, });
       });
     });
     it('should accept a boolean', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ loop: true, });
+        sysmon._start({ loop: true, });
       });
     });
   });
   describe('- silent', () => {
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ silent: new Date(), });
+        sysmon._start({ silent: new Date(), });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ silent: ['test', 'test'], });
+        sysmon._start({ silent: ['test', 'test'], });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ silent: {test: 'test'}, });
+        sysmon._start({ silent: {test: 'test'}, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ silent: 'test', });
+        sysmon._start({ silent: 'test', });
       });
     });
     it('should not accept a number', function() {
       assert.throws(function() {
-        sysmon.start({ silent: 123, });
+        sysmon._start({ silent: 123, });
       });
     });
     it('should accept a boolean', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ silent: true, });
+        sysmon._start({ silent: true, });
       });
     });
   });
   describe('- threshold', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: true, });
+        sysmon._start({ threshold: true, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: new Date(), });
+        sysmon._start({ threshold: new Date(), });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: 'test', });
+        sysmon._start({ threshold: 'test', });
       });
     });
     it('should accept a number', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: 123456789, });
+        sysmon._start({ threshold: 123456789, });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: ['test'], });
+        sysmon._start({ threshold: ['test'], });
       });
     });
     it('should accept an object', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: {test: 'test', }, });
+        sysmon._start({ threshold: {test: 'test', }, });
       });
     });
   });
   describe('- threshold.freemem', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { freemem: true, }, });
+        sysmon._start({ threshold: { freemem: true, }, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { freemem: new Date(), }, });
+        sysmon._start({ threshold: { freemem: new Date(), }, });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { freemem: ['test'], }, });
+        sysmon._start({ threshold: { freemem: ['test'], }, });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { freemem: {test: 'test', }, }, });
+        sysmon._start({ threshold: { freemem: {test: 'test', }, }, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { freemem: 'test', }, });
+        sysmon._start({ threshold: { freemem: 'test', }, });
       });
     });
     it('should accept a number', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { freemem: 123456789, }, });
+        sysmon._start({ threshold: { freemem: 123456789, }, });
       });
     });
     it('should accept a number as a string', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { freemem: '123456789', }, });
+        sysmon._start({ threshold: { freemem: '123456789', }, });
       });
     });
   });
   describe('- threshold.uptime', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { uptime: true, }, });
+        sysmon._start({ threshold: { uptime: true, }, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { uptime: new Date(), }, });
+        sysmon._start({ threshold: { uptime: new Date(), }, });
       });
     });
     it('should not accept an array', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { uptime: ['test'], }, });
+        sysmon._start({ threshold: { uptime: ['test'], }, });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { uptime: {test: 'test', }, }, });
+        sysmon._start({ threshold: { uptime: {test: 'test', }, }, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { uptime: 'test', }, });
+        sysmon._start({ threshold: { uptime: 'test', }, });
       });
     });
     it('should accept a number', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { uptime: 123456789, }, });
+        sysmon._start({ threshold: { uptime: 123456789, }, });
       });
     });
     it('should accept a number as a string', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { uptime: '123456789', }, });
+        sysmon._start({ threshold: { uptime: '123456789', }, });
       });
     });
   });
   describe('- threshold.loadavg', () => {
     it('should not accept a boolean', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: true, }, });
+        sysmon._start({ threshold: { loadavg: true, }, });
       });
     });
     it('should not accept a date', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: new Date(), }, });
+        sysmon._start({ threshold: { loadavg: new Date(), }, });
       });
     });
     it('should not accept an object', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: {test: 'test', }, }, });
+        sysmon._start({ threshold: { loadavg: {test: 'test', }, }, });
       });
     });
     it('should not accept a string', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: 'test', }, });
+        sysmon._start({ threshold: { loadavg: 'test', }, });
       });
     });
     it('should accept a number', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { loadavg: 123456789, }, });
+        sysmon._start({ threshold: { loadavg: 123456789, }, });
       });
     });
     it('should accept a number as a string', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { loadavg: '123456789', }, });
+        sysmon._start({ threshold: { loadavg: '123456789', }, });
       });
     });
     it('should not accept an array if it does not contain strings', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: ['test', 'test'], }, });
+        sysmon._start({ threshold: { loadavg: ['test', 'test'], }, });
       });
     });
     it('should not accept an array if it does not contain strings', function() {
       assert.throws(function() {
-        sysmon.start({ threshold: { loadavg: ['test', 'test', 'test'], }, });
+        sysmon._start({ threshold: { loadavg: ['test', 'test', 'test'], }, });
       });
     });
     it('should accept an array with 3 numbers', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { loadavg: [1234, 1234, 1234], }, });
+        sysmon._start({ threshold: { loadavg: [1234, 1234, 1234], }, });
       });
     });
     it('should accept an array with 3 numbers as strings', function() {
       assert.doesNotThrow(function() {
-        sysmon.start({ threshold: { loadavg: ['1234', '1234', '1234'], }, });
+        sysmon._start({ threshold: { loadavg: ['1234', '1234', '1234'], }, });
       });
     });
   });
   describe('Miscellaneous tests:', () => {
     it('Issue #1: should save default configuration', function() {
       assert.doesNotThrow(function() {
-        sysmon.start();
+        sysmon._start();
         var uptime = sysmon.config().threshold.uptime;
-        sysmon.start({
+        sysmon._start({
           threshold: {
             test: 'test',
           },
@@ -302,6 +312,16 @@ describe('Sysmon.config() ', () => {
             throw new Error('Does not save default state!');
           }
         });
+      });
+    });
+  });
+});
+
+describe('Sysmon.ps()', () => {
+  describe('options', () => {
+    it('should not accept random sort parameters', function() {
+      assert.throws(function() {
+        sysmon.ps({sort: 'test'});
       });
     });
   });
