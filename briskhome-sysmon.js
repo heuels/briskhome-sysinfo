@@ -62,15 +62,14 @@ function Sysmon() {
 util.inherits(Sysmon, events.EventEmitter);
 
 /**
- * Emits an event when something happens.
+ * Emits events.
  *
  * Note the code below that adds timestamp to the event object. Javascript
  * uses the number of milliseconds since epoch, Unix timestamp, on the other
  * hand, uses seconds since epoch.
  *
- * @param {string} event Name of the event that occured during the execution of
- *        the library.
- * @param {object} obj Current set of captured stats.
+ * @param {string} event  Name of the event.
+ * @param {object} obj    Object containing server information.
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
   var curtime = Math.floor(+Date.now() / 1000);
@@ -84,15 +83,13 @@ Sysmon.prototype.sendEvent = function(event, obj) {
  * Starts system state monitor.
  *
  * Amount of output can be tuned by setting the 'silent' option of the
- * configuration to 'true'. This makes it so that 'status' events are not fired.
+ * configuration to 'true'. This makes it so that 'status' events are fired
+ * only if a threshold is broken.
  *
  * Parameters, including critical values, are loaded from configuration object
  * if present or from a default configuration object.
  *
- * @todo Validate this function with 'let' instead of 'var' with JSHint.
- *
  * @param {Array} options A set of options passed from the declaration.
- * @returns {Sysmon}
  */
 Sysmon.prototype._start = function(options) {
   // Calling stop() here clears the old interval.
@@ -156,7 +153,7 @@ Sysmon.prototype._start = function(options) {
           leases: data.leases,
         },
       };
-      review(JSON.stringify(result));
+      review(result);
     });
   }.bind(this);
 
@@ -166,33 +163,40 @@ Sysmon.prototype._start = function(options) {
    * information against preset critical values.
    */
   var review = function review(data) {
-    // Critical values by default are supplied for the following:
-    console.log(data);
-    // let critical = [];
-    // let config = this.config();
-    // let freemem = (config.threshold.freemem < 1)
-    //   ? config.threshold.freemem * data.totalram
-    //   : config.threshold.freemem;
-    // if (data.system.cpu.loadavg > config.loadavg[0]) {
-    //   critical.push('loadavg');
+    let critical = [];
+    let config = this.config();
+    let freemem = (config.threshold.freemem < 1)
+      ? config.threshold.freemem * data.totalram
+      : config.threshold.freemem;
+    if (data.system.cpu.loadavg > config.threshold.loadavg[0]) {
+      critical.push('system.cpu.loadavg');
+    }
+    if (data.system.cpu.loadavg5 > config.threshold.loadavg[1]) {
+      critical.push('system.cpu.loadavg5');
+    }
+    if (data.system.cpu.loadavg15 > config.threshold.loadavg[2]) {
+      critical.push('system.cpu.loadavg15');
+    }
+    if (data.system.memory.free < freemem) {
+      critical.push('system.memory.freemem');
+    }
+    if (data.system.uptime > config.threshold.uptime) {
+      critical.push('system.uptime');
+    }
+    // for (let disk in data.system.disks) {
+    //   if (data.system.disks.hasOwnProperty(disk)) {
+    //     if (disk.free < config.threshold.hdd) {
+    //
+    //     }
+    //
+    //
+    //   }
     // }
-    // if (data.system.cpu.loadavg5 > config.loadavg[1]) {
-    //   critical.push('loadavg5');
-    // }
-    // if (data.system.cpu.loadavg15 > config.loadavg[2]) {
-    //   critical.push('loadavg15');
-    // }
-    // if (data.system.memory.free > freemem) {
-    //   critical.push('freemem');
-    // }
-    // if (data.system.uptime > config.uptime) {
-    //   critical.push('uptime');
-    // }
-    // // TODO: Default all hard disk critical value.
-    // data.critical = critical || [];
-    // this.sendEvent('state', Object.assign({
-    //   type: 'state',
-    // }, data));
+    data.critical = critical || [];
+    console.log(JSON.stringify(data));
+    this.sendEvent('state', Object.assign({
+      type: 'state',
+    }, data));
 
   }.bind(this);
 
@@ -331,19 +335,19 @@ Sysmon.prototype.config = function(options) {
 };
 
 Sysmon.prototype._sanitizeConfig = function(options, callback) {
-  if (options.constructor !== Object) {
+  if (!is.object(options)) {
     callback('Configuration object is of wrong type.');
   }
   if ('interval' in options && !is.number(options.interval)) {
     callback('Option \'interval\' should be a number.');
   }
-  if ('silent' in options && typeof options.silent !== 'boolean') {
+  if ('silent' in options && !is.boolean(options.silent)) {
     callback('Option \'silent\' should be a boolean.');
   }
-  if ('loop' in options && (typeof options.loop !== 'boolean')) {
+  if ('loop' in options && !is.boolean(options.loop)) {
     callback('Option \'loop\' should be a boolean.');
   }
-  if ('threshold' in options && (options.threshold.constructor !== Object)) {
+  if ('threshold' in options && !is.object(options.threshold)) {
     callback('Option \'threshold\' should be an object.');
   }
   if ('threshold' in options && 'freemem' in options.threshold) {
@@ -362,7 +366,7 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
     var loadavg = options.threshold.loadavg;
     if (is.number(loadavg)) {
       options.threshold.loadavg = [loadavg, loadavg, loadavg];
-    } else if (loadavg.constructor === Array) {
+    } else if (is.array(loadavg)) {
       if (loadavg.length !== 3 || loadavg.every(function(item) {
         if (!is.number(item)) {
           callback('Option \'loadavg\' should be a Number or an Array.');
@@ -410,18 +414,18 @@ Sysmon.prototype.ps = function(options, callback) {
     return callback(err);
   }
 
-  if (isNaN(parseFloat(limit)) && !isFinite(limit)) {
+  if (!is.number(limit)) {
     let err = new Error('Limit parameter should be a number.');
     return callback(err);
   }
 
-  if (typeof reverse !== 'boolean') {
+  if (!is.boolean(reverse)) {
     let err = new Error('Reverse parameter should be a boolean.');
     return callback(err);
   }
 
   processes.get(function(err, data) {
-    if (typeof sort === 'string' || sort instanceof String) {
+    if (is.string(sort)) {
       data.sort(function(a, b) {
         return (a[sort] > b[sort]) - (a[sort] < b[sort]);
       });
@@ -457,7 +461,7 @@ Sysmon.prototype.ps = function(options, callback) {
  */
 Sysmon.prototype.df = function(options, callback) {
   // 'options' should not be used?
-  options = (typeof options === 'string' || options instanceof String)
+  options = (is.string(options))
     ? options
     : null;
   let command = (os.platform().toLowerCase() === 'darwin')
@@ -501,12 +505,14 @@ Sysmon.prototype.df = function(options, callback) {
  * @param {Array} data.
  */
 Sysmon.prototype.dhcp = function(options, callback) {
-  let file = (options && 'file' in options) // && file !== ''  // TODO: cb(err).
+  // && file !== ''  // TODO: cb(err).
+  let file = (options && 'file' in options)
     ? options.file
     : '/var/lib/dhcp/dhcpd.leases';
-  let encoding = (options && 'encoding' in options) // FIXME: use encoding.
-    ? options.encoding
-    : null;
+  // FIXME: use encoding.
+  // let encoding = (options && 'encoding' in options)
+  //   ? options.encoding
+  //   : null;
   fs.readFile(file, 'utf8', (err, data) => {
     if (err) {
       return callback(err);
@@ -536,19 +542,16 @@ Sysmon.prototype.services = function (options, callback) {
   let command = (os.platform().toLowerCase() === 'darwin')
     ? 'cat ./services'
     : 'sudo services --status-all';
-  exec(command, (err, stdout, stderr) => {
+  exec(command, (err, stdout) => {
     if (err) {
       return callback(err);
     }
 
-    console.log('stdout: ' + stdout);
-    console.log('stderr: ' + stderr);
     const regexp = /\s\[\s([\+\-\?])\s\]\s+([a-z0-9\+\-]+)/gim;
     let result = {};
     let data = stdout.split('\n');
     data.forEach(string => {
       let matches = regexp.exec(string);
-      console.log('matches: ' + matches);
       if (!matches) {
         return;
       }
