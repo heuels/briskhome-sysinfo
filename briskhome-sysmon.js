@@ -91,7 +91,7 @@ Sysmon.prototype.sendEvent = function(event, obj) {
  *
  * @param {Array} options A set of options passed from the declaration.
  */
-Sysmon.prototype._start = function(options) {
+Sysmon.prototype.start = function(options) {
   // Calling stop() here clears the old interval.
   // Configuration happens once only right after the creation of instance.
   this.stop();
@@ -214,73 +214,6 @@ Sysmon.prototype._start = function(options) {
   }
 };
 
-Sysmon.prototype.start = function(options) {
-  var _this = this;
-  if (_this._isStopped()) {
-    throw new Error('briskhome-sysmon has been destroyed by .destroy() method');
-  }
-  if (options) {
-    //
-  }
-  _this.stop();
-  _this.config(options);
-  var main = function() {
-    var data = {
-      loadavg: os.loadavg(),
-      uptime: os.uptime(),
-      freemem: os.freemem(),
-      totalram: os.totalmem(),
-    };
-    var config = _this.config();
-    var freemem = (config.threshold.freemem < 1)
-      ? config.threshold.freemem * data.totalram
-      : config.threshold.freemem;
-    if (!config.silent) {
-      _this.sendEvent('event', Object.assign({
-        type: 'regular',
-      }, data));
-    }
-    if (data.loadavg[0] > config.threshold.loadavg[0]) {
-      _this.sendEvent('threshold-loadavg1', Object.assign({
-        type: 'threshold-loadavg1',
-      }, data));
-    }
-    if (data.loadavg[1] > config.threshold.loadavg[1]) {
-      _this.sendEvent('threshold-loadavg5', Object.assign({
-        type: 'threshold-loadavg5',
-      }, data));
-    }
-    if (data.loadavg[2] > config.threshold.loadavg[2]) {
-      _this.sendEvent('threshold-loadavg15', Object.assign({
-        type: 'threshold-loadavg15',
-      }, data));
-    }
-    if (data.freemem < freemem) {
-      _this.sendEvent('threshold-freemem', Object.assign({
-        type: 'threshold-freemem',
-      }, data));
-    }
-    if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
-      _this.sendEvent('threshold-uptime', Object.assign({
-        type: 'threshold-uptime',
-      }, data));
-    }
-  };
-
-  if (_this.config().loop) {
-    process.nextTick(main);
-  }
-
-  _this._state.interval = setInterval(main, _this.config().interval);
-  if (!_this.isRunning()) {
-    _this._state.running = true;
-    _this.sendEvent('start', {
-      type: 'start',
-    });
-  }
-  return _this;
-};
-
 /**
  * Stops execution of Sysmon instance. Clears the interval that was set for
  * execution of main() function and emits a 'stop' event.
@@ -380,12 +313,6 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
   }
   callback(null, options);
 };
-
-module.exports = new Sysmon();
-module.exports.Sysmon = Sysmon;
-
-/* Below this line are WIP functions. */
-// TODO: Move these functions to the top.
 
 /**
  * Wrapper for 'ps' Unix program. Displays the currently-running processes.
@@ -568,6 +495,9 @@ Sysmon.prototype.services = function (options, callback) {
     callback(null, result);
   });
 };
+
+module.exports = new Sysmon();
+module.exports.Sysmon = Sysmon;
 
 /**
  * Extends Array class with 'includes' method that checks
