@@ -8,9 +8,9 @@
 
 'use strict';
 
-var events   = require('events');
-var util     = require('util');
-var os       = require('os');
+var events = require('events');
+var util = require('util');
+var os = require('os');
 
 var DEFAULT_CONFIG = {
   loop: false,
@@ -59,9 +59,12 @@ util.inherits(Sysmon, events.EventEmitter);
  */
 Sysmon.prototype.sendEvent = function(event, obj) {
   var curtime = Math.floor(+Date.now() / 1000);
-  var eventObj = Object.assign({
-    timestamp: curtime,
-  }, obj);
+  var eventObj = Object.assign(
+    {
+      timestamp: curtime,
+    },
+    obj,
+  );
   this.emit(event, eventObj);
 };
 
@@ -94,38 +97,75 @@ Sysmon.prototype.start = function(options) {
       totalmem: os.totalmem(),
     };
     var config = _this.config();
-    var freemem = (config.threshold.freemem < 1)
-      ? config.threshold.freemem * data.totalmem
-      : config.threshold.freemem;
+    var freemem =
+      config.threshold.freemem < 1
+        ? config.threshold.freemem * data.totalmem
+        : config.threshold.freemem;
     if (!config.silent) {
-      _this.sendEvent('event', Object.assign({
-        type: 'regular',
-      }, data));
+      _this.sendEvent(
+        'event',
+        Object.assign(
+          {
+            type: 'regular',
+          },
+          data,
+        ),
+      );
     }
     if (data.loadavg[0] > config.threshold.loadavg[0]) {
-      _this.sendEvent('threshold-loadavg1', Object.assign({
-        type: 'threshold-loadavg1',
-      }, data));
+      _this.sendEvent(
+        'threshold-loadavg1',
+        Object.assign(
+          {
+            type: 'threshold-loadavg1',
+          },
+          data,
+        ),
+      );
     }
     if (data.loadavg[1] > config.threshold.loadavg[1]) {
-      _this.sendEvent('threshold-loadavg5', Object.assign({
-        type: 'threshold-loadavg5',
-      }, data));
+      _this.sendEvent(
+        'threshold-loadavg5',
+        Object.assign(
+          {
+            type: 'threshold-loadavg5',
+          },
+          data,
+        ),
+      );
     }
     if (data.loadavg[2] > config.threshold.loadavg[2]) {
-      _this.sendEvent('threshold-loadavg15', Object.assign({
-        type: 'threshold-loadavg15',
-      }, data));
+      _this.sendEvent(
+        'threshold-loadavg15',
+        Object.assign(
+          {
+            type: 'threshold-loadavg15',
+          },
+          data,
+        ),
+      );
     }
     if (data.freemem < freemem) {
-      _this.sendEvent('threshold-freemem', Object.assign({
-        type: 'threshold-freemem',
-      }, data));
+      _this.sendEvent(
+        'threshold-freemem',
+        Object.assign(
+          {
+            type: 'threshold-freemem',
+          },
+          data,
+        ),
+      );
     }
-    if ((_this._sanitizeNumber) && (data.uptime > _this._sanitizeNumber)) {
-      _this.sendEvent('threshold-uptime', Object.assign({
-        type: 'threshold-uptime',
-      }, data));
+    if (_this._sanitizeNumber && data.uptime > _this._sanitizeNumber) {
+      _this.sendEvent(
+        'threshold-uptime',
+        Object.assign(
+          {
+            type: 'threshold-uptime',
+          },
+          data,
+        ),
+      );
     }
   };
   if (_this.config().loop) {
@@ -163,8 +203,9 @@ Sysmon.prototype.reset = function() {
   this.sendEvent('reset', {
     type: 'reset',
   });
-  this[this.isRunning() ? 'start' : 'config']
-    (Object.assign({}, DEFAULT_CONFIG));
+  this[this.isRunning() ? 'start' : 'config'](
+    Object.assign({}, DEFAULT_CONFIG),
+  );
   return this;
 };
 
@@ -244,27 +285,27 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
     callback('Configuration object is of wrong type.');
   }
   if ('delay' in options && !this.isNumeric(options.delay)) {
-    callback('Option \'delay\' should be a number.');
+    callback("Option 'delay' should be a number.");
   }
   if ('silent' in options && typeof options.silent !== 'boolean') {
-    callback('Option \'silent\' should be a boolean.');
+    callback("Option 'silent' should be a boolean.");
   }
-  if ('loop' in options && (typeof options.loop !== 'boolean')) {
-    callback('Option \'loop\' should be a boolean.');
+  if ('loop' in options && typeof options.loop !== 'boolean') {
+    callback("Option 'loop' should be a boolean.");
   }
-  if ('threshold' in options && (options.threshold.constructor !== Object)) {
-    callback('Option \'threshold\' should be an object.');
+  if ('threshold' in options && options.threshold.constructor !== Object) {
+    callback("Option 'threshold' should be an object.");
   }
   if ('threshold' in options && 'freemem' in options.threshold) {
     var freemem = options.threshold.freemem;
     if (/(^\d+$|^0\.\d+$)/.test(freemem) === false) {
-      callback('Option \'freemem\' should be a Number.');
+      callback("Option 'freemem' should be a Number.");
     }
   }
   if ('threshold' in options && 'uptime' in options.threshold) {
     var uptime = options.threshold.uptime;
     if (!this.isNumeric(uptime)) {
-      callback('Option \'uptime\' should be a Number.');
+      callback("Option 'uptime' should be a Number.");
     }
   }
   if ('threshold' in options && 'loadavg' in options.threshold) {
@@ -272,15 +313,18 @@ Sysmon.prototype._sanitizeConfig = function(options, callback) {
     if (this.isNumeric(loadavg)) {
       options.threshold.loadavg = [loadavg, loadavg, loadavg];
     } else if (loadavg.constructor === Array) {
-      if (loadavg.length !== 3 || loadavg.every(function(item, i, arr) {
-        if (!this.isNumeric(item)) {
-          callback('Option \'loadavg\' should be a Number or an Array.');
-        }
-      }, this)) {
-        callback('Option \'loadavg\' should contain an Array with 3 items.');
+      if (
+        loadavg.length !== 3 ||
+        loadavg.every(function(item, i, arr) {
+          if (!this.isNumeric(item)) {
+            callback("Option 'loadavg' should be a Number or an Array.");
+          }
+        }, this)
+      ) {
+        callback("Option 'loadavg' should contain an Array with 3 items.");
       }
     } else {
-      callback('Option \'loadavg\' should be a Number or an Array.');
+      callback("Option 'loadavg' should be a Number or an Array.");
     }
   }
   callback(null, options);
