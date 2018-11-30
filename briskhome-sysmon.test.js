@@ -8,11 +8,6 @@
 
 'use strict';
 
-/* globals it: false */
-/* globals describe: false */
-/* globals done: false */
-/* globals afterEach: false*/
-
 var assert = require('chai').assert;
 var mock = require('mock-os');
 
